@@ -3,14 +3,20 @@ const API = {
   baseUrl: '/api',
 
   async request(method, endpoint, data = null) {
+    const isGet = method === 'GET';
+    const url = isGet
+      ? `${this.baseUrl}${endpoint}${endpoint.includes('?') ? '&' : '?'}_ts=${Date.now()}`
+      : `${this.baseUrl}${endpoint}`;
+
     const options = {
       method,
       headers: { 'Content-Type': 'application/json' },
+      cache: isGet ? 'no-store' : 'default',
     };
     if (data) options.body = JSON.stringify(data);
 
     try {
-      const res = await fetch(`${this.baseUrl}${endpoint}`, options);
+      const res = await fetch(url, options);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Request failed');
       return json;

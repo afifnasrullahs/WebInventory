@@ -1,6 +1,8 @@
 // SPA Router & Utilities
 const App = {
   currentPage: null,
+  pollTimer: null,
+  POLL_INTERVAL: 2000, // 2 seconds
 
   pages: {
     '/': DashboardPage,
@@ -13,6 +15,7 @@ const App = {
   init() {
     this.bindEvents();
     this.navigate();
+    this.startPolling();
   },
 
   bindEvents() {
@@ -33,8 +36,46 @@ const App = {
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') App.closeModal();
     });
+
+    // Pause polling when tab is hidden, resume + refresh when visible
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        this.stopPolling();
+      } else {
+        this.refreshCurrentPage();
+        this.startPolling();
+      }
+    });
   },
 
+  // ========== AUTO-REFRESH POLLING ==========
+  startPolling() {
+    this.stopPolling();
+    this.pollTimer = setInterval(() => {
+      if (!document.hidden) {
+        this.refreshCurrentPage();
+      }
+    }, this.POLL_INTERVAL);
+  },
+
+  stopPolling() {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+  },
+
+  refreshCurrentPage() {
+    if (this.currentPage && typeof this.currentPage.loadData === 'function') {
+      this.currentPage.loadData();
+    }
+  },
+
+  isModalOpen() {
+    return document.getElementById('modalOverlay')?.classList.contains('active');
+  },
+
+  // ========== NAVIGATION ==========
   navigate() {
     const hash = window.location.hash.slice(1) || '/';
     const page = this.pages[hash];
@@ -52,9 +93,10 @@ const App = {
 
     this.currentPage = page;
     page.render();
+    this.startPolling(); // reset timer on page change
   },
 
-  // Modal
+  // ========== MODAL ==========
   openModal(title, bodyHtml, footerHtml = '', size = '') {
     document.getElementById('modalTitle').textContent = title;
     document.getElementById('modalBody').innerHTML = bodyHtml;
@@ -68,7 +110,7 @@ const App = {
     document.getElementById('modalOverlay').classList.remove('active');
   },
 
-  // Toast
+  // ========== TOAST ==========
   toast(message, type = 'success') {
     const container = document.getElementById('toastContainer');
     const icons = {
@@ -88,7 +130,7 @@ const App = {
     }, 3000);
   },
 
-  // Helpers
+  // ========== HELPERS ==========
   formatPrice(value) {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
