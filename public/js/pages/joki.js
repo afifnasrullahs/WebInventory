@@ -5,6 +5,7 @@ const JokiPage = {
   activeTab: 'orders',
   orderFilter: '',
   searchQuery: '',
+  servicePickerQuery: '',
 
   async render() {
     const content = document.getElementById('content');
@@ -105,6 +106,9 @@ const JokiPage = {
                   <td style="font-size:12px;color:var(--text-muted)">${App.formatDate(o.created_at)}</td>
                   <td>
                     <div class="actions">
+                      ${(o.status !== 'done' && o.status !== 'cancelled') ? `
+                        <button class="btn btn-sm btn-secondary" onclick="JokiPage.showEditOrder('${o.id}')" title="Edit"><i class="bx bx-edit-alt"></i></button>
+                      ` : ''}
                       <button class="btn btn-sm btn-secondary" onclick="JokiPage.showOrderDetail('${o.id}')"><i class="bx bx-show"></i></button>
                       ${o.status === 'pending' ? `
                         <button class="btn btn-sm btn-warning" onclick="JokiPage.advanceStatus('${o.id}', 'in_progress')" title="Start"><i class="bx bx-play"></i></button>
@@ -269,9 +273,12 @@ const JokiPage = {
       return;
     }
 
+    this.servicePickerQuery = '';
+
     App.openModal('Buat Order Joki', `
       <div class="form-group">
         <label>Layanan Joki</label>
+        <input type="text" class="form-control search-input" id="jokiServiceSearch" placeholder="Cari layanan joki..." style="margin-bottom:8px;">
         <select class="form-control" id="jokiServiceSelect">
           ${this.services.map((s) => `<option value="${s.id}" data-price="${s.price}">${s.name} — ${App.formatPrice(s.price)}</option>`).join('')}
         </select>
@@ -307,12 +314,19 @@ const JokiPage = {
       <button class="btn btn-primary" id="submitJokiOrderBtn"><i class="bx bx-check"></i>Buat Order</button>
     `, 'lg');
 
+    document.getElementById('jokiServiceSearch').addEventListener('input', (e) => {
+      this.servicePickerQuery = e.target.value.trim().toLowerCase();
+      this.updateServicePickerOptions('jokiServiceSelect');
+    });
+    this.updateServicePickerOptions('jokiServiceSelect');
+
     document.getElementById('submitJokiOrderBtn').addEventListener('click', async () => {
       const joki_service_id = document.getElementById('jokiServiceSelect').value;
       const customer_name = document.getElementById('jokiCustomerName').value.trim();
       const game_username = document.getElementById('jokiGameUsername').value.trim();
       const game_password = document.getElementById('jokiGamePassword').value.trim();
-      const tiktok_usn = document.getElementById('jokiTiktokUsn').value.trim();
+      const tiktok_usn_raw = document.getElementById('jokiTiktokUsn').value.trim();
+      const tiktok_usn = tiktok_usn_raw.replace(/^@+/, '').trim();
       const priceOverride = document.getElementById('jokiPriceOverride').value;
       const notes = document.getElementById('jokiNotes').value.trim();
 
@@ -333,6 +347,125 @@ const JokiPage = {
         App.toast(err.message, 'error');
       }
     });
+  },
+
+  updateServicePickerOptions(selectId, selectedId = null) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+
+    const q = (this.servicePickerQuery || '').trim().toLowerCase();
+    const prev = selectedId || select.value;
+    const filtered = !q
+      ? this.services
+      : this.services.filter((s) => {
+        const text = [s.name, s.description || ''].join(' ').toLowerCase();
+        return text.includes(q);
+      });
+
+    if (!filtered.length) {
+      select.innerHTML = `<option value="">Tidak ada layanan yang cocok</option>`;
+      select.value = '';
+      return;
+    }
+
+    select.innerHTML = filtered
+      .map((s) => `<option value="${s.id}" data-price="${s.price}">${s.name} — ${App.formatPrice(s.price)}</option>`)
+      .join('');
+
+    const stillExists = filtered.some((s) => s.id === prev);
+    select.value = stillExists ? prev : filtered[0].id;
+  },
+
+  async showEditOrder(id) {
+    try {
+      const [orderRes, servicesRes] = await Promise.all([
+        API.getJokiOrder(id),
+        this.services.length ? Promise.resolve({ data: this.services }) : API.getJokiServices(),
+      ]);
+
+      const o = orderRes.data;
+      if (!this.services.length) this.services = servicesRes.data || [];
+
+      this.servicePickerQuery = '';
+
+      App.openModal('Edit Order Joki', `
+        <div class="form-group">
+          <label>Layanan Joki</label>
+          <input type="text" class="form-control search-input" id="jokiServiceSearch" placeholder="Cari layanan joki..." style="margin-bottom:8px;">
+          <select class="form-control" id="jokiServiceSelect"></select>
+        </div>
+        <div class="form-group">
+          <label>Nama Customer</label>
+          <input type="text" class="form-control" id="jokiCustomerName" placeholder="Nama customer" value="${o.customer_name || ''}">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Username Game</label>
+            <input type="text" class="form-control" id="jokiGameUsername" placeholder="Username login" value="${o.game_username || ''}">
+          </div>
+          <div class="form-group">
+            <label>Password Game</label>
+            <input type="text" class="form-control" id="jokiGamePassword" placeholder="Password login" value="${o.game_password || ''}">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>TikTok USN</label>
+          <input type="text" class="form-control" id="jokiTiktokUsn" placeholder="@username_tiktok" value="${o.tiktok_usn ? `@${o.tiktok_usn}`.replace('@@', '@') : ''}">
+        </div>
+        <div class="form-group">
+          <label>Harga Override (opsional)</label>
+          <input type="number" class="form-control" id="jokiPriceOverride" placeholder="Kosongkan untuk harga default" value="${o.price ?? ''}">
+          <small style="color:var(--text-muted);font-size:11px;margin-top:4px;display:block;">Kosongkan kalau ingin pakai harga layanan (jika layanan diganti)</small>
+        </div>
+        <div class="form-group">
+          <label>Catatan</label>
+          <textarea class="form-control" id="jokiNotes" rows="2" placeholder="Catatan tambahan...">${o.notes || ''}</textarea>
+        </div>
+      `, `
+        <button class="btn btn-secondary" onclick="App.closeModal()">Batal</button>
+        <button class="btn btn-primary" id="saveJokiOrderBtn"><i class="bx bx-check"></i>Simpan</button>
+      `, 'lg');
+
+      document.getElementById('jokiServiceSearch').addEventListener('input', (e) => {
+        this.servicePickerQuery = e.target.value.trim().toLowerCase();
+        this.updateServicePickerOptions('jokiServiceSelect', o.joki_service_id);
+      });
+      this.updateServicePickerOptions('jokiServiceSelect', o.joki_service_id);
+
+      document.getElementById('saveJokiOrderBtn').addEventListener('click', async () => {
+        const joki_service_id = document.getElementById('jokiServiceSelect').value;
+        const customer_name = document.getElementById('jokiCustomerName').value.trim();
+        const game_username = document.getElementById('jokiGameUsername').value.trim();
+        const game_password = document.getElementById('jokiGamePassword').value.trim();
+        const tiktok_usn_raw = document.getElementById('jokiTiktokUsn').value.trim();
+        const tiktok_usn = tiktok_usn_raw.replace(/^@+/, '').trim();
+        const priceOverride = document.getElementById('jokiPriceOverride').value;
+        const notes = document.getElementById('jokiNotes').value.trim();
+
+        if (!customer_name || !game_username || !game_password || !tiktok_usn || !joki_service_id) {
+          App.toast('Semua field wajib harus diisi', 'error');
+          return;
+        }
+
+        const data = { joki_service_id, customer_name, game_username, game_password, tiktok_usn, notes };
+        if (priceOverride === '' || priceOverride === null || priceOverride === undefined) {
+          // do not send price -> backend will default to service price (useful when service changed)
+        } else {
+          data.price = parseFloat(priceOverride);
+        }
+
+        try {
+          await API.updateJokiOrder(id, data);
+          App.toast('Order joki berhasil diupdate');
+          App.closeModal();
+          await this.loadData();
+        } catch (err) {
+          App.toast(err.message, 'error');
+        }
+      });
+    } catch (err) {
+      App.toast(err.message, 'error');
+    }
   },
 
   // Order Detail

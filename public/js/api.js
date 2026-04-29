@@ -79,6 +79,7 @@ const API = {
   },
   createJokiOrder(data) { return this.request('POST', '/joki/orders', data); },
   getJokiOrder(id) { return this.request('GET', `/joki/orders/${id}`); },
+  updateJokiOrder(id, data) { return this.request('PUT', `/joki/orders/${id}`, data); },
   updateJokiOrderStatus(id, status) { return this.request('PUT', `/joki/orders/${id}/status`, { status }); },
   cancelJokiOrder(id) { return this.request('PUT', `/joki/orders/${id}/cancel`); },
 

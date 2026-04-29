@@ -200,6 +200,76 @@ exports.getOrderById = async (req, res, next) => {
   }
 };
 
+// PUT /api/joki/orders/:id
+exports.updateOrder = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { joki_service_id, customer_name, game_username, game_password, tiktok_usn, price, notes } = req.body;
+
+    if (!joki_service_id || !customer_name || !game_username || !game_password || !tiktok_usn) {
+      return res.status(400).json({
+        success: false,
+        error: 'joki_service_id, customer_name, game_username, game_password, and tiktok_usn are required',
+      });
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from('joki_orders')
+      .select('id, status')
+      .eq('id', id)
+      .single();
+
+    if (existingError) throw existingError;
+    if (!existing) return res.status(404).json({ success: false, error: 'Joki order not found' });
+
+    if (existing.status === 'done' || existing.status === 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        error: 'Tidak bisa edit order yang sudah selesai atau sudah di-cancel',
+      });
+    }
+
+    // Get service for default price (and validate service exists)
+    const { data: service } = await supabase
+      .from('joki_services')
+      .select('price')
+      .eq('id', joki_service_id)
+      .single();
+
+    if (!service) {
+      return res.status(404).json({ success: false, error: 'Joki service not found' });
+    }
+
+    const finalPrice = price !== undefined && price !== null && `${price}` !== ''
+      ? parseFloat(price)
+      : parseFloat(service.price);
+
+    const updates = {
+      joki_service_id,
+      customer_name: customer_name.trim(),
+      game_username: game_username.trim(),
+      game_password,
+      tiktok_usn: tiktok_usn.trim(),
+      price: finalPrice,
+      notes: notes || null,
+    };
+
+    const { data, error } = await supabase
+      .from('joki_orders')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ success: false, error: 'Joki order not found' });
+
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // PUT /api/joki/orders/:id/status
 exports.updateOrderStatus = async (req, res, next) => {
   try {
