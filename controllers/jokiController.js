@@ -1,4 +1,5 @@
 const supabase = require('../config/database');
+const { sendDiscordWebhook } = require('../utils/discordWebhook');
 
 // ============ SERVICES ============
 
@@ -145,7 +146,7 @@ exports.createOrder = async (req, res, next) => {
     // Get service for default price
     const { data: service } = await supabase
       .from('joki_services')
-      .select('price')
+      .select('name, price')
       .eq('id', joki_service_id)
       .single();
 
@@ -170,6 +171,33 @@ exports.createOrder = async (req, res, next) => {
       .single();
 
     if (error) throw error;
+
+    // Fire-and-forget Discord notify (do not block order creation)
+    const webhookUrl = process.env.DISCORD_JOKI_WEBHOOK_URL;
+    if (webhookUrl) {
+      sendDiscordWebhook(webhookUrl, {
+        content: `📩 **Order Joki Masuk**`,
+        embeds: [
+          {
+            title: 'Order Joki Baru',
+            color: 0x5865f2,
+            fields: [
+              { name: 'Customer', value: String(customer_name || '-'), inline: true },
+              { name: 'TikTok USN', value: `@${String(tiktok_usn || '').replace(/^@+/, '') || '-'}`, inline: true },
+              { name: 'Layanan', value: String(service?.name || '-'), inline: true },
+              { name: 'Harga', value: `IDR ${Number(finalPrice || 0).toLocaleString('id-ID')}`, inline: true },
+              { name: 'Status', value: 'pending', inline: true },
+              { name: 'Order ID', value: String(data.id), inline: false },
+            ],
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      }).catch((e) => {
+        // Avoid crashing requests if Discord fails
+        console.warn('[discord] failed to send joki notify:', e?.message || e);
+      });
+    }
+
     res.status(201).json({ success: true, data });
   } catch (err) {
     next(err);
