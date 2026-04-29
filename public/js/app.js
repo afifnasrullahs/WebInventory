@@ -8,6 +8,7 @@ const App = {
     '/sets': SetsPage,
     '/transactions': TransactionsPage,
     '/joki': JokiPage,
+    '/products': ProductListPage,
   },
 
   init() {

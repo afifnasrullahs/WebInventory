@@ -615,6 +615,11 @@ select.form-control option {
   color: #60a5fa;
 }
 
+.badge-joki {
+  background: rgba(244, 63, 94, 0.12);
+  color: #fb7185;
+}
+
 .badge-stock {
   padding: 3px 8px;
   border-radius: 6px;

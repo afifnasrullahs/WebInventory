@@ -4,6 +4,7 @@ const SetsPage = {
   allItems: [],
   pendingSetItems: [], // items to add when creating a new set
   searchQuery: '',
+  setItemSearchQuery: '',
 
   async render() {
     const content = document.getElementById('content');
@@ -103,6 +104,7 @@ const SetsPage = {
         quantity: i.quantity,
       }));
     }
+    this.setItemSearchQuery = '';
 
     App.openModal(title, `
       <div class="form-group">
@@ -121,6 +123,9 @@ const SetsPage = {
 
       <div style="background:var(--bg-input);border:1px solid var(--border-subtle);border-radius:var(--radius-sm);padding:14px;">
         <p style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Tambah Item ke Set</p>
+        <div class="form-group" style="margin-bottom:10px;">
+          <input type="text" class="form-control search-input" id="setItemSearch" placeholder="Cari item untuk ditambahkan...">
+        </div>
         <div class="form-row" style="grid-template-columns:1fr 100px auto;align-items:end;">
           <div class="form-group" style="margin-bottom:0">
             <select class="form-control" id="setItemSelect">
@@ -141,6 +146,10 @@ const SetsPage = {
 
     this.renderSetItemsInForm();
 
+    document.getElementById('setItemSearch').addEventListener('input', (e) => {
+      this.setItemSearchQuery = e.target.value.trim().toLowerCase();
+      this.renderAvailableItemsOptions();
+    });
     document.getElementById('addItemToSetFormBtn').addEventListener('click', () => this.addItemToForm());
     document.getElementById('saveSetBtn').addEventListener('click', () => this.saveSet(editId));
   },
@@ -148,6 +157,21 @@ const SetsPage = {
   getAvailableItems() {
     const usedIds = this.pendingSetItems.map((i) => i.item_id);
     return this.allItems.filter((i) => !usedIds.includes(i.id));
+  },
+
+  getFilteredAvailableItems() {
+    const availableItems = this.getAvailableItems();
+    if (!this.setItemSearchQuery) return availableItems;
+    return availableItems.filter((item) => item.name.toLowerCase().includes(this.setItemSearchQuery));
+  },
+
+  renderAvailableItemsOptions() {
+    const select = document.getElementById('setItemSelect');
+    if (!select) return;
+
+    const filteredItems = this.getFilteredAvailableItems();
+    select.innerHTML = `<option value="">-- Pilih Item --</option>
+      ${filteredItems.map((i) => `<option value="${i.id}" data-name="${i.name}">${i.name} (Stok: ${i.stock})</option>`).join('')}`;
   },
 
   renderSetItemsInForm() {
@@ -172,11 +196,7 @@ const SetsPage = {
     }
 
     // Update available items in select
-    const select = document.getElementById('setItemSelect');
-    if (select) {
-      select.innerHTML = `<option value="">-- Pilih Item --</option>
-        ${this.getAvailableItems().map((i) => `<option value="${i.id}" data-name="${i.name}">${i.name} (Stok: ${i.stock})</option>`).join('')}`;
-    }
+    this.renderAvailableItemsOptions();
   },
 
   addItemToForm() {
