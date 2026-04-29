@@ -83,8 +83,14 @@ const TransactionsPage = {
     }
 
     return `
-      <div style="display:flex;flex-wrap:wrap;gap:6px;max-width:420px;">
-        ${summary.map((item) => `<span class="set-item-tag" style="white-space:nowrap;">${item.name}<span class="tag-qty">×${item.quantity}</span></span>`).join('')}
+      <div style="display:flex;flex-direction:column;gap:4px;max-width:420px;">
+        ${summary.map((item) => `
+          <div style="display:flex;align-items:center;gap:6px;min-width:0;">
+            <span style="color:var(--text-muted);flex-shrink:0;">-</span>
+            <span style="white-space:normal;word-break:break-word;">${item.name}</span>
+            <span style="color:var(--accent-secondary);font-weight:700;flex-shrink:0;">×${item.quantity}</span>
+          </div>
+        `).join('')}
       </div>
     `;
   },

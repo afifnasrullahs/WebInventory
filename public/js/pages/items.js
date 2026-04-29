@@ -187,6 +187,12 @@ const ItemsPage = {
         return;
       }
 
+      const importBtn = document.getElementById('runYummytrackImportBtn');
+      importBtn.disabled = true;
+      importBtn.innerHTML = '<i class="bx bx-loader-alt bx-spin"></i>Memproses...';
+
+      App.toast('Memproses import Yummytrack...', 'info');
+
       try {
         const res = await API.importYummytrackPetsVps(apiKey);
         App.toast(`Import selesai: ${res.data.imported} baru, ${res.data.updated} diperbarui`);
@@ -194,6 +200,9 @@ const ItemsPage = {
         await this.loadData();
       } catch (err) {
         App.toast(err.message, 'error');
+      } finally {
+        importBtn.disabled = false;
+        importBtn.innerHTML = '<i class="bx bx-cloud-download"></i>Import';
       }
     });
   },

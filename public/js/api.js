@@ -18,7 +18,17 @@ const API = {
 
     try {
       const res = await fetch(url, options);
-      const json = await res.json();
+      const text = await res.text();
+      let json = {};
+
+      if (text) {
+        try {
+          json = JSON.parse(text);
+        } catch (parseError) {
+          throw new Error(text);
+        }
+      }
+
       if (!res.ok) throw new Error(json.error || 'Request failed');
       return json;
     } catch (err) {
