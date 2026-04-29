@@ -1,26 +1,19 @@
 const supabase = require('../config/database');
 
 const YUMMYTRACK_URL =
-  process.env.YUMMYTRACK_PETS_VPS_URL ||
   'https://itemku-autochat-api-production.up.railway.app/api/yummytrack/pets-vps';
 
 const extractInventoryItems = (payload) => {
   const source = payload?.data ?? payload;
-  const items = Array.isArray(source)
-    ? source
-    : Array.isArray(source?.items)
-      ? source.items
-      : Array.isArray(payload?.items)
-        ? payload.items
-        : [];
+  const items = source?.items || source || [];
 
   return items
-    .filter((item) => item && item.type === 'inventory' && item.name)
+    .filter((item) => item?.type === 'inventory' && item?.name)
     .map((item) => ({
-      name: String(item.name).trim(),
+      name: item.name.trim(),
       price: 0,
       send_quantity: 1,
-      stock: Number.isFinite(Number(item.amount)) ? parseInt(item.amount, 10) : 0,
+      stock: Number(item.amount) || 0,
     }));
 };
 
@@ -40,20 +33,12 @@ exports.importPetsVps = async (req, res, next) => {
       },
     });
 
-    let payload;
-    try {
-      payload = await upstreamRes.json();
-    } catch (parseError) {
-      return res.status(502).json({
-        success: false,
-        error: 'Invalid JSON returned by Yummytrack',
-      });
-    }
+    const payload = await upstreamRes.json();
 
     if (!upstreamRes.ok) {
       return res.status(upstreamRes.status).json({
         success: false,
-        error: payload?.error || 'Failed to fetch data',
+        error: payload?.error || 'Failed to fetch from upstream',
       });
     }
 
@@ -92,20 +77,9 @@ exports.importPetsVps = async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        source: payload.source || payload.data?.source || 'yummytrackstat',
+        total: inventoryItems.length,
         imported: inserted,
         updated,
-        skipped: (() => {
-          const source = payload?.data ?? payload;
-          const items = Array.isArray(source)
-            ? source
-            : Array.isArray(source?.items)
-              ? source.items
-              : Array.isArray(payload?.items)
-                ? payload.items
-                : [];
-          return items.filter((item) => item.type !== 'inventory' || !item.name).length;
-        })(),
       },
     });
   } catch (err) {
