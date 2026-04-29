@@ -2,6 +2,60 @@ const supabase = require('../config/database');
 
 const YUMMYTRACK_URL = process.env.YUMMYTRACK_PETS_VPS_URL || 'https://yummytrackstat.com/api/yummytrack/pets-vps';
 
+const tryParseJson = (value) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'object') return value;
+
+  const text = String(value).trim();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch (firstError) {
+    const firstObject = text.indexOf('{');
+    const lastObject = text.lastIndexOf('}');
+    if (firstObject !== -1 && lastObject > firstObject) {
+      try {
+        return JSON.parse(text.slice(firstObject, lastObject + 1));
+      } catch (secondError) {
+        // fall through
+      }
+    }
+
+    const firstArray = text.indexOf('[');
+    const lastArray = text.lastIndexOf(']');
+    if (firstArray !== -1 && lastArray > firstArray) {
+      try {
+        return JSON.parse(text.slice(firstArray, lastArray + 1));
+      } catch (thirdError) {
+        // fall through
+      }
+    }
+
+    return null;
+  }
+};
+
+const extractInventoryItems = (payload) => {
+  const source = payload?.data ?? payload;
+  const items = Array.isArray(source)
+    ? source
+    : Array.isArray(source?.items)
+      ? source.items
+      : Array.isArray(payload?.items)
+        ? payload.items
+        : [];
+
+  return items
+    .filter((item) => item && item.type === 'inventory' && item.name)
+    .map((item) => ({
+      name: String(item.name).trim(),
+      price: 0,
+      send_quantity: 1,
+      stock: Number.isFinite(Number(item.amount)) ? parseInt(item.amount, 10) : 0,
+    }));
+};
+
 exports.importPetsVps = async (req, res, next) => {
   try {
     const apiKey = req.get('X-API-Key');
@@ -19,14 +73,13 @@ exports.importPetsVps = async (req, res, next) => {
     });
 
     const rawBody = await upstreamRes.text();
-    let payload;
+    const payload = tryParseJson(rawBody);
 
-    try {
-      payload = rawBody ? JSON.parse(rawBody) : {};
-    } catch (parseError) {
+    if (!payload) {
       return res.status(502).json({
         success: false,
         error: 'Invalid JSON returned by Yummytrack',
+        details: rawBody.slice(0, 200),
       });
     }
 
@@ -37,14 +90,7 @@ exports.importPetsVps = async (req, res, next) => {
       });
     }
 
-    const inventoryItems = (payload.items || payload.data?.items || [])
-      .filter((item) => item.type === 'inventory' && item.name)
-      .map((item) => ({
-        name: item.name.trim(),
-        price: 0,
-        send_quantity: 1,
-        stock: Number.isFinite(Number(item.amount)) ? parseInt(item.amount, 10) : 0,
-      }));
+    const inventoryItems = extractInventoryItems(payload);
 
     let inserted = 0;
     let updated = 0;
@@ -79,10 +125,20 @@ exports.importPetsVps = async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        source: payload.source || 'yummytrackstat',
+        source: payload.source || payload.data?.source || 'yummytrackstat',
         imported: inserted,
         updated,
-        skipped: (payload.items || payload.data?.items || []).filter((item) => item.type !== 'inventory' || !item.name).length,
+        skipped: (() => {
+          const source = payload?.data ?? payload;
+          const items = Array.isArray(source)
+            ? source
+            : Array.isArray(source?.items)
+              ? source.items
+              : Array.isArray(payload?.items)
+                ? payload.items
+                : [];
+          return items.filter((item) => item.type !== 'inventory' || !item.name).length;
+        })(),
       },
     });
   } catch (err) {
