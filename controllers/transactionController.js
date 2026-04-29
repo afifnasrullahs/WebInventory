@@ -1,12 +1,54 @@
 const supabase = require('../config/database');
 
+const enrichTransactions = async (transactions) => {
+  if (!transactions.length) return transactions;
+
+  const txnIds = transactions.map((txn) => txn.id);
+  const { data: details, error: detailsError } = await supabase
+    .from('transaction_details')
+    .select('transaction_id, type, ref_id, quantity')
+    .in('transaction_id', txnIds)
+    .order('id', { ascending: true });
+
+  if (detailsError) throw detailsError;
+
+  const itemIds = [...new Set(details.filter((detail) => detail.type === 'item').map((detail) => detail.ref_id))];
+  const setIds = [...new Set(details.filter((detail) => detail.type === 'set').map((detail) => detail.ref_id))];
+
+  const [itemsRes, setsRes] = await Promise.all([
+    itemIds.length ? supabase.from('items').select('id, name').in('id', itemIds) : Promise.resolve({ data: [] }),
+    setIds.length ? supabase.from('sets').select('id, name').in('id', setIds) : Promise.resolve({ data: [] }),
+  ]);
+
+  if (itemsRes.error) throw itemsRes.error;
+  if (setsRes.error) throw setsRes.error;
+
+  const itemNames = new Map((itemsRes.data || []).map((item) => [item.id, item.name]));
+  const setNames = new Map((setsRes.data || []).map((set) => [set.id, set.name]));
+  const summaryByTxn = new Map(txnIds.map((id) => [id, []]));
+
+  details.forEach((detail) => {
+    const name = detail.type === 'item' ? itemNames.get(detail.ref_id) : setNames.get(detail.ref_id);
+    summaryByTxn.get(detail.transaction_id).push({
+      name: name || (detail.type === 'item' ? 'Deleted Item' : 'Deleted Set'),
+      quantity: detail.quantity,
+      type: detail.type,
+    });
+  });
+
+  return transactions.map((txn) => ({
+    ...txn,
+    summary: summaryByTxn.get(txn.id) || [],
+  }));
+};
+
 // POST /api/transactions — Calls RPC for atomic create
 exports.create = async (req, res, next) => {
   try {
-    const { buyer_name, items } = req.body;
+    const { buyer_name, tiktok_username, roblox_username, items } = req.body;
 
-    if (!buyer_name || !items || !items.length) {
-      return res.status(400).json({ success: false, error: 'buyer_name and items are required' });
+    if (!buyer_name || !tiktok_username || !roblox_username || !items || !items.length) {
+      return res.status(400).json({ success: false, error: 'buyer_name, tiktok_username, roblox_username and items are required' });
     }
 
     // Validate input shape
@@ -21,6 +63,8 @@ exports.create = async (req, res, next) => {
 
     const { data, error } = await supabase.rpc('create_transaction', {
       p_buyer_name: buyer_name.trim(),
+      p_tiktok_username: tiktok_username.trim(),
+      p_roblox_username: roblox_username.trim(),
       p_items: items,
     });
 
@@ -30,7 +74,7 @@ exports.create = async (req, res, next) => {
       return res.status(400).json({ success: false, error: msg });
     }
 
-    res.status(201).json({ success: true, data });
+    res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
@@ -49,7 +93,38 @@ exports.getAll = async (req, res, next) => {
     const { data, error } = await query;
     if (error) throw error;
 
-    res.json({ success: true, data });
+    res.status(201).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PUT /api/transactions/:id
+exports.update = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updates = {};
+
+    if (req.body.buyer_name !== undefined) updates.buyer_name = req.body.buyer_name.trim();
+    if (req.body.tiktok_username !== undefined) updates.tiktok_username = req.body.tiktok_username.trim();
+    if (req.body.roblox_username !== undefined) updates.roblox_username = req.body.roblox_username.trim();
+
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ success: false, error: 'Tidak ada data yang diubah' });
+    }
+
+    const { data, error } = await supabase
+      .from('transactions')
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ success: false, error: 'Transaction not found' });
+
+    const [enriched] = await enrichTransactions([data]);
+    res.json({ success: true, data: enriched });
   } catch (err) {
     next(err);
   }

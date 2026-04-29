@@ -1,8 +1,6 @@
 // SPA Router & Utilities
 const App = {
   currentPage: null,
-  pollTimer: null,
-  POLL_INTERVAL: 2000, // 2 seconds
 
   pages: {
     '/': DashboardPage,
@@ -15,7 +13,6 @@ const App = {
   init() {
     this.bindEvents();
     this.navigate();
-    this.startPolling();
   },
 
   bindEvents() {
@@ -36,39 +33,6 @@ const App = {
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') App.closeModal();
     });
-
-    // Pause polling when tab is hidden, resume + refresh when visible
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        this.stopPolling();
-      } else {
-        this.refreshCurrentPage();
-        this.startPolling();
-      }
-    });
-  },
-
-  // ========== AUTO-REFRESH POLLING ==========
-  startPolling() {
-    this.stopPolling();
-    this.pollTimer = setInterval(() => {
-      if (!document.hidden) {
-        this.refreshCurrentPage();
-      }
-    }, this.POLL_INTERVAL);
-  },
-
-  stopPolling() {
-    if (this.pollTimer) {
-      clearInterval(this.pollTimer);
-      this.pollTimer = null;
-    }
-  },
-
-  refreshCurrentPage() {
-    if (this.currentPage && typeof this.currentPage.loadData === 'function') {
-      this.currentPage.loadData();
-    }
   },
 
   isModalOpen() {
@@ -93,7 +57,6 @@ const App = {
 
     this.currentPage = page;
     page.render();
-    this.startPolling(); // reset timer on page change
   },
 
   // ========== MODAL ==========
@@ -166,7 +129,7 @@ const App = {
   },
 
   loading() {
-    return '<div class="loading"><div class="spinner"></div></div>';
+    return '<div class="loading"><span style="color:var(--text-muted);font-size:13px;">Memuat data...</span></div>';
   },
 };
 

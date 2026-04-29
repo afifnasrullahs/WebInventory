@@ -4,6 +4,7 @@ const TransactionsPage = {
   allItems: [],
   allSets: [],
   currentFilter: '',
+  searchQuery: '',
   txnItems: [],
 
   async render() {
@@ -15,6 +16,11 @@ const TransactionsPage = {
           <p class="page-header-subtitle">Kelola transaksi penjualan</p>
         </div>
         <button class="btn btn-primary" id="createTxnBtn"><i class="bx bx-plus"></i>Buat Transaksi</button>
+      </div>
+      <div class="table-wrapper" style="margin-bottom:20px;">
+        <div class="table-toolbar">
+          <input type="text" class="form-control search-input" id="txnSearch" placeholder="Cari transaksi, username, atau item...">
+        </div>
       </div>
       <div class="filter-tabs" id="txnFilters">
         <button class="filter-tab active" data-status="">Semua</button>
@@ -28,6 +34,7 @@ const TransactionsPage = {
     `;
 
     document.getElementById('createTxnBtn').addEventListener('click', () => this.showCreateForm());
+    document.getElementById('txnSearch').addEventListener('input', () => this.renderTable());
     document.getElementById('txnFilters').addEventListener('click', (e) => {
       if (e.target.classList.contains('filter-tab')) {
         document.querySelectorAll('#txnFilters .filter-tab').forEach((t) => t.classList.remove('active'));
@@ -50,25 +57,64 @@ const TransactionsPage = {
     }
   },
 
+  getVisibleTransactions() {
+    const search = (document.getElementById('txnSearch')?.value || '').trim().toLowerCase();
+    this.searchQuery = search;
+
+    if (!search) {
+      return this.transactions;
+    }
+
+    return this.transactions.filter((txn) => {
+      const summaryText = (txn.summary || []).map((item) => `${item.name} ${item.quantity}`).join(' ').toLowerCase();
+      return [
+        txn.buyer_name,
+        txn.tiktok_username,
+        txn.roblox_username,
+        txn.status,
+        summaryText,
+      ].some((value) => (value || '').toLowerCase().includes(search));
+    });
+  },
+
+  renderSummary(txn) {
+    const summary = txn.summary || [];
+    if (!summary.length) {
+      return '<span style="color:var(--text-muted);font-size:13px;">-</span>';
+    }
+
+    return `
+      <div style="display:flex;flex-wrap:wrap;gap:6px;max-width:420px;">
+        ${summary.map((item) => `<span class="set-item-tag" style="white-space:nowrap;">${item.name}<span class="tag-qty">×${item.quantity}</span></span>`).join('')}
+      </div>
+    `;
+  },
+
   renderTable() {
     const el = document.getElementById('txnTable');
-    if (!this.transactions.length) {
+    const transactions = this.getVisibleTransactions();
+
+    if (!transactions.length) {
       el.innerHTML = `<div class="empty-state"><i class="bx bx-receipt"></i><h3>Tidak ada transaksi</h3><p>Buat transaksi pertama untuk memulai</p></div>`;
       return;
     }
 
     el.innerHTML = `
       <table>
-        <thead><tr><th>Buyer</th><th>Total</th><th>Status</th><th>Tanggal</th><th>Aksi</th></tr></thead>
+        <thead><tr><th>Buyer</th><th>TikTok</th><th>Roblox</th><th>Item / Qty</th><th>Total</th><th>Status</th><th>Tanggal</th><th>Aksi</th></tr></thead>
         <tbody>
-          ${this.transactions.map((txn) => `
+          ${transactions.map((txn) => `
             <tr>
               <td><strong>${txn.buyer_name}</strong></td>
+              <td>@${txn.tiktok_username || '-'}</td>
+              <td>@${txn.roblox_username || '-'}</td>
+              <td>${this.renderSummary(txn)}</td>
               <td class="price">${App.formatPrice(txn.total_price)}</td>
               <td>${App.statusBadge(txn.status)}</td>
               <td style="font-size:12px;color:var(--text-muted)">${App.formatDate(txn.created_at)}</td>
               <td>
                 <div class="actions">
+                  <button class="btn btn-sm btn-secondary" onclick="TransactionsPage.showEditForm('${txn.id}')"><i class="bx bx-edit-alt"></i>Edit</button>
                   <button class="btn btn-sm btn-secondary" onclick="TransactionsPage.showDetail('${txn.id}')"><i class="bx bx-show"></i>Detail</button>
                   ${txn.status === 'pending' ? `
                     <button class="btn btn-sm btn-success" onclick="TransactionsPage.markDone('${txn.id}')" title="Selesai"><i class="bx bx-check"></i></button>
@@ -97,8 +143,18 @@ const TransactionsPage = {
 
     App.openModal('Buat Transaksi', `
       <div class="form-group">
-        <label>Username Buyer</label>
-        <input type="text" class="form-control" id="txnBuyerName" placeholder="Username pembeli">
+        <label>Nama Buyer</label>
+        <input type="text" class="form-control" id="txnBuyerName" placeholder="Nama pembeli">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Username TikTok</label>
+          <input type="text" class="form-control" id="txnTiktokUsername" placeholder="Username TikTok">
+        </div>
+        <div class="form-group">
+          <label>Username Roblox</label>
+          <input type="text" class="form-control" id="txnRobloxUsername" placeholder="Username Roblox">
+        </div>
       </div>
 
       <hr style="border-color:var(--border-subtle);margin:18px 0;">
@@ -255,8 +311,14 @@ const TransactionsPage = {
 
   async submitTransaction() {
     const buyer_name = document.getElementById('txnBuyerName').value.trim();
+    const tiktok_username = document.getElementById('txnTiktokUsername').value.trim();
+    const roblox_username = document.getElementById('txnRobloxUsername').value.trim();
     if (!buyer_name) {
-      App.toast('Username buyer harus diisi', 'error');
+      App.toast('Nama buyer harus diisi', 'error');
+      return;
+    }
+    if (!tiktok_username || !roblox_username) {
+      App.toast('Username TikTok dan Roblox harus diisi', 'error');
       return;
     }
     if (!this.txnItems.length) {
@@ -267,6 +329,8 @@ const TransactionsPage = {
     try {
       await API.createTransaction({
         buyer_name,
+        tiktok_username,
+        roblox_username,
         items: this.txnItems.map((i) => ({
           type: i.type,
           ref_id: i.ref_id,
@@ -283,36 +347,80 @@ const TransactionsPage = {
     }
   },
 
+  async showEditForm(id) {
+    try {
+      const res = await API.getTransaction(id);
+      const txn = res.data;
+
+      App.openModal('Edit Transaksi', `
+        <div class="form-group">
+          <label>Nama Buyer</label>
+          <input type="text" class="form-control" id="editTxnBuyerName" value="${txn.buyer_name || ''}" placeholder="Nama pembeli">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Username TikTok</label>
+            <input type="text" class="form-control" id="editTxnTiktokUsername" value="${txn.tiktok_username || ''}" placeholder="Username TikTok">
+          </div>
+          <div class="form-group">
+            <label>Username Roblox</label>
+            <input type="text" class="form-control" id="editTxnRobloxUsername" value="${txn.roblox_username || ''}" placeholder="Username Roblox">
+          </div>
+        </div>
+        <div style="padding:12px 14px;border:1px solid var(--border-subtle);border-radius:var(--radius-sm);background:var(--bg-input);font-size:13px;color:var(--text-secondary);">
+          Item transaksi tidak diubah dari form edit ini. Gunakan transaksi baru bila perlu ubah isi item.
+        </div>
+      `, `
+        <button class="btn btn-secondary" onclick="App.closeModal()">Batal</button>
+        <button class="btn btn-primary" id="saveTxnEditBtn">Simpan Perubahan</button>
+      `, 'lg');
+
+      document.getElementById('saveTxnEditBtn').addEventListener('click', () => this.saveTransactionEdit(id));
+    } catch (err) {
+      App.toast(err.message, 'error');
+    }
+  },
+
+  async saveTransactionEdit(id) {
+    const buyer_name = document.getElementById('editTxnBuyerName').value.trim();
+    const tiktok_username = document.getElementById('editTxnTiktokUsername').value.trim();
+    const roblox_username = document.getElementById('editTxnRobloxUsername').value.trim();
+
+    if (!buyer_name || !tiktok_username || !roblox_username) {
+      App.toast('Semua field username harus diisi', 'error');
+      return;
+    }
+
+    try {
+      await API.updateTransaction(id, { buyer_name, tiktok_username, roblox_username });
+      App.toast('Transaksi berhasil diupdate');
+      App.closeModal();
+      await this.loadData();
+    } catch (err) {
+      App.toast(err.message, 'error');
+    }
+  },
+
   async showDetail(id) {
     try {
       const res = await API.getTransaction(id);
       const txn = res.data;
 
       const detailsHtml = txn.details.map((d) => `
-        <div class="txn-item-row" style="flex-direction:column;align-items:stretch;gap:8px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span class="badge badge-${d.type}">${d.type}</span>
-              <strong>${d.ref_name || d.ref_id}</strong>
-            </div>
-            <span class="price">${d.quantity} × ${App.formatPrice(d.price)} = ${App.formatPrice(d.quantity * d.price)}</span>
+        <div class="txn-item-row" style="justify-content:space-between;align-items:center;gap:12px;">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+            <span class="badge badge-${d.type}">${d.type}</span>
+            <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${d.ref_name || d.ref_id}</strong>
           </div>
-          ${d.breakdown && d.breakdown.length ? `
-            <div class="breakdown-list">
-              ${d.breakdown.map((b) => `
-                <div class="breakdown-item">
-                  <span class="item-name"><i class="bx bx-subdirectory-right" style="font-size:14px;"></i>${b.item_name || b.item_id}</span>
-                  <span>×${b.quantity}</span>
-                </div>
-              `).join('')}
-            </div>
-          ` : ''}
+          <span class="price">×${d.quantity}</span>
         </div>
       `).join('');
 
       App.openModal('Detail Transaksi', `
         <div class="detail-grid">
           <div class="detail-item"><label>Buyer</label><p>${txn.buyer_name}</p></div>
+          <div class="detail-item"><label>TikTok</label><p>@${txn.tiktok_username || '-'}</p></div>
+          <div class="detail-item"><label>Roblox</label><p>@${txn.roblox_username || '-'}</p></div>
           <div class="detail-item"><label>Status</label><p>${App.statusBadge(txn.status)}</p></div>
           <div class="detail-item"><label>Total</label><p class="price">${App.formatPrice(txn.total_price)}</p></div>
           <div class="detail-item"><label>Tanggal</label><p>${App.formatDate(txn.created_at)}</p></div>

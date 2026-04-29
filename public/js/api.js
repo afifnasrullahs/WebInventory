@@ -2,7 +2,7 @@
 const API = {
   baseUrl: '/api',
 
-  async request(method, endpoint, data = null) {
+  async request(method, endpoint, data = null, requestOptions = {}) {
     const isGet = method === 'GET';
     const url = isGet
       ? `${this.baseUrl}${endpoint}${endpoint.includes('?') ? '&' : '?'}_ts=${Date.now()}`
@@ -10,8 +10,9 @@ const API = {
 
     const options = {
       method,
-      headers: { 'Content-Type': 'application/json' },
       cache: isGet ? 'no-store' : 'default',
+      ...requestOptions,
+      headers: { 'Content-Type': 'application/json', ...(requestOptions.headers || {}) },
     };
     if (data) options.body = JSON.stringify(data);
 
@@ -50,6 +51,7 @@ const API = {
     return this.request('GET', `/transactions${q}`);
   },
   getTransaction(id) { return this.request('GET', `/transactions/${id}`); },
+  updateTransaction(id, data) { return this.request('PUT', `/transactions/${id}`, data); },
   updateTransactionStatus(id, status) { return this.request('PUT', `/transactions/${id}/status`, { status }); },
   cancelTransaction(id) { return this.request('PUT', `/transactions/${id}/cancel`); },
 
@@ -68,4 +70,11 @@ const API = {
   getJokiOrder(id) { return this.request('GET', `/joki/orders/${id}`); },
   updateJokiOrderStatus(id, status) { return this.request('PUT', `/joki/orders/${id}/status`, { status }); },
   cancelJokiOrder(id) { return this.request('PUT', `/joki/orders/${id}/cancel`); },
+
+  // Yummytrack import
+  importYummytrackPetsVps(apiKey) {
+    return this.request('GET', '/yummytrack/pets-vps', null, {
+      headers: { 'X-API-Key': apiKey },
+    });
+  },
 };

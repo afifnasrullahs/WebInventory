@@ -13,6 +13,7 @@ app.use('/api/items', require('../routes/items'));
 app.use('/api/sets', require('../routes/sets'));
 app.use('/api/transactions', require('../routes/transactions'));
 app.use('/api/joki', require('../routes/joki'));
+app.use('/api/yummytrack', require('../routes/yummytrack'));
 
 // Error handler
 app.use(require('../middleware/errorHandler'));

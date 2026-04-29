@@ -4,6 +4,7 @@ const JokiPage = {
   orders: [],
   activeTab: 'orders',
   orderFilter: '',
+  searchQuery: '',
 
   async render() {
     const content = document.getElementById('content');
@@ -22,6 +23,11 @@ const JokiPage = {
         <button class="page-tab active" data-tab="orders">Orders</button>
         <button class="page-tab" data-tab="services">Layanan Joki</button>
       </div>
+      <div class="table-wrapper" style="margin-bottom:20px;">
+        <div class="table-toolbar">
+          <input type="text" class="form-control search-input" id="jokiSearch" placeholder="Cari order, customer, username, atau layanan...">
+        </div>
+      </div>
       <div id="jokiContent">${App.loading()}</div>
     `;
 
@@ -32,6 +38,7 @@ const JokiPage = {
     });
 
     document.getElementById('createJokiOrderBtn').addEventListener('click', () => this.showCreateOrder());
+    document.getElementById('jokiSearch').addEventListener('input', () => this.renderContent());
 
     document.querySelectorAll('.page-tab').forEach((tab) => {
       tab.addEventListener('click', () => {
@@ -74,6 +81,7 @@ const JokiPage = {
 
   renderOrders() {
     const el = document.getElementById('jokiContent');
+    const orders = this.getFilteredOrders();
     el.innerHTML = `
       <div class="filter-tabs" id="jokiOrderFilters">
         <button class="filter-tab ${this.orderFilter === '' ? 'active' : ''}" data-status="">Semua</button>
@@ -83,11 +91,11 @@ const JokiPage = {
         <button class="filter-tab ${this.orderFilter === 'cancelled' ? 'active' : ''}" data-status="cancelled">Cancelled</button>
       </div>
       <div class="table-wrapper" id="jokiOrdersTable">
-        ${this.orders.length ? `
+        ${orders.length ? `
           <table>
             <thead><tr><th>Customer</th><th>TikTok USN</th><th>Layanan</th><th>Harga</th><th>Status</th><th>Tanggal</th><th>Aksi</th></tr></thead>
             <tbody>
-              ${this.orders.map((o) => `
+              ${orders.map((o) => `
                 <tr>
                   <td><strong>${o.customer_name}</strong></td>
                   <td>@${o.tiktok_usn}</td>
@@ -126,16 +134,17 @@ const JokiPage = {
 
   renderServices() {
     const el = document.getElementById('jokiContent');
+    const services = this.getFilteredServices();
     el.innerHTML = `
       <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
         <button class="btn btn-primary btn-sm" onclick="JokiPage.showServiceForm()"><i class="bx bx-plus"></i>Tambah Layanan</button>
       </div>
       <div class="table-wrapper">
-        ${this.services.length ? `
+        ${services.length ? `
           <table>
             <thead><tr><th>Nama Layanan</th><th>Harga</th><th>Deskripsi</th><th>Aksi</th></tr></thead>
             <tbody>
-              ${this.services.map((s) => `
+              ${services.map((s) => `
                 <tr>
                   <td><strong>${s.name}</strong></td>
                   <td class="price">${App.formatPrice(s.price)}</td>
@@ -153,6 +162,28 @@ const JokiPage = {
         ` : `<div class="empty-state"><i class="bx bx-cog"></i><h3>Belum ada layanan joki</h3><p>Tambahkan layanan pertama</p></div>`}
       </div>
     `;
+  },
+
+  getFilteredOrders() {
+    const search = (document.getElementById('jokiSearch')?.value || '').trim().toLowerCase();
+    this.searchQuery = search;
+
+    return this.orders.filter((order) => {
+      if (!search) return true;
+      const text = [order.customer_name, order.tiktok_usn, order.service_name, order.status].join(' ').toLowerCase();
+      return text.includes(search);
+    });
+  },
+
+  getFilteredServices() {
+    const search = (document.getElementById('jokiSearch')?.value || '').trim().toLowerCase();
+    this.searchQuery = search;
+
+    return this.services.filter((service) => {
+      if (!search) return true;
+      const text = [service.name, service.description || ''].join(' ').toLowerCase();
+      return text.includes(search);
+    });
   },
 
   // Service Forms

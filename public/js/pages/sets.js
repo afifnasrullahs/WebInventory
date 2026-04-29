@@ -3,6 +3,7 @@ const SetsPage = {
   sets: [],
   allItems: [],
   pendingSetItems: [], // items to add when creating a new set
+  searchQuery: '',
 
   async render() {
     const content = document.getElementById('content');
@@ -14,9 +15,15 @@ const SetsPage = {
         </div>
         <button class="btn btn-primary" id="addSetBtn"><i class="bx bx-plus"></i>Tambah Set</button>
       </div>
+      <div class="table-wrapper" style="margin-bottom:20px;">
+        <div class="table-toolbar">
+          <input type="text" class="form-control search-input" id="setSearch" placeholder="Cari set atau item dalam set...">
+        </div>
+      </div>
       <div id="setsContainer">${App.loading()}</div>
     `;
     document.getElementById('addSetBtn').addEventListener('click', () => this.showForm());
+    document.getElementById('setSearch').addEventListener('input', () => this.renderSets());
     await this.loadData();
   },
 
@@ -33,7 +40,16 @@ const SetsPage = {
 
   renderSets() {
     const el = document.getElementById('setsContainer');
-    if (!this.sets.length) {
+    const search = (document.getElementById('setSearch')?.value || '').trim().toLowerCase();
+    this.searchQuery = search;
+    const filteredSets = !search
+      ? this.sets
+      : this.sets.filter((set) => {
+          const text = [set.name, ...(set.items || []).map((item) => item.item_name)].join(' ').toLowerCase();
+          return text.includes(search);
+        });
+
+    if (!filteredSets.length) {
       el.innerHTML = `<div class="card"><div class="empty-state"><i class="bx bx-collection"></i><h3>Belum ada set</h3><p>Buat set/bundle pertama untuk memulai</p></div></div>`;
       return;
     }
@@ -43,7 +59,7 @@ const SetsPage = {
         <table>
           <thead><tr><th>Nama Set</th><th>Harga</th><th>Stok Set</th><th>Items dalam Set</th><th>Aksi</th></tr></thead>
           <tbody>
-            ${this.sets.map((set) => {
+            ${filteredSets.map((set) => {
               const items = set.items || [];
               return `
                 <tr>

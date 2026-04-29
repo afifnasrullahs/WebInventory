@@ -10,7 +10,10 @@ const ItemsPage = {
           <h1>Items</h1>
           <p class="page-header-subtitle">Kelola inventory produk</p>
         </div>
-        <button class="btn btn-primary" id="addItemBtn"><i class="bx bx-plus"></i>Tambah Item</button>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-secondary" id="importYummytrackBtn"><i class="bx bx-cloud-download"></i>Import Yummytrack</button>
+          <button class="btn btn-primary" id="addItemBtn"><i class="bx bx-plus"></i>Tambah Item</button>
+        </div>
       </div>
       <div class="table-wrapper">
         <div class="table-toolbar">
@@ -20,6 +23,7 @@ const ItemsPage = {
       </div>
     `;
     document.getElementById('addItemBtn').addEventListener('click', () => this.showForm());
+    document.getElementById('importYummytrackBtn').addEventListener('click', () => this.showYummytrackImportForm());
     document.getElementById('itemSearch').addEventListener('input', this.debounce(() => this.loadData(), 300));
     await this.loadData();
   },
@@ -154,6 +158,38 @@ const ItemsPage = {
       try {
         await API.deleteItem(id);
         App.toast('Item berhasil dihapus');
+        App.closeModal();
+        await this.loadData();
+      } catch (err) {
+        App.toast(err.message, 'error');
+      }
+    });
+  },
+
+  showYummytrackImportForm() {
+    App.openModal('Import Yummytrack', `
+      <div class="form-group">
+        <label>X-API-Key</label>
+        <input type="password" class="form-control" id="yummytrackApiKey" placeholder="Masukkan API key">
+      </div>
+      <div style="padding:12px 14px;border:1px solid var(--border-subtle);border-radius:var(--radius-sm);background:var(--bg-input);font-size:13px;color:var(--text-secondary);">
+        Hanya item bertipe <strong>inventory</strong> yang akan diimport. Harga diset 0 dan jumlah kirim diset 1, stok diambil dari amount.
+      </div>
+    `, `
+      <button class="btn btn-secondary" onclick="App.closeModal()">Batal</button>
+      <button class="btn btn-primary" id="runYummytrackImportBtn"><i class="bx bx-cloud-download"></i>Import</button>
+    `, 'md');
+
+    document.getElementById('runYummytrackImportBtn').addEventListener('click', async () => {
+      const apiKey = document.getElementById('yummytrackApiKey').value.trim();
+      if (!apiKey) {
+        App.toast('API key harus diisi', 'error');
+        return;
+      }
+
+      try {
+        const res = await API.importYummytrackPetsVps(apiKey);
+        App.toast(`Import selesai: ${res.data.imported} baru, ${res.data.updated} diperbarui`);
         App.closeModal();
         await this.loadData();
       } catch (err) {
