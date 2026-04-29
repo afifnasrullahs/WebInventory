@@ -1,40 +1,8 @@
 const supabase = require('../config/database');
 
-const YUMMYTRACK_URL = process.env.YUMMYTRACK_PETS_VPS_URL || 'https://yummytrackstat.com/api/yummytrack/pets-vps';
-
-const tryParseJson = (value) => {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'object') return value;
-
-  const text = String(value).trim();
-  if (!text) return null;
-
-  try {
-    return JSON.parse(text);
-  } catch (firstError) {
-    const firstObject = text.indexOf('{');
-    const lastObject = text.lastIndexOf('}');
-    if (firstObject !== -1 && lastObject > firstObject) {
-      try {
-        return JSON.parse(text.slice(firstObject, lastObject + 1));
-      } catch (secondError) {
-        // fall through
-      }
-    }
-
-    const firstArray = text.indexOf('[');
-    const lastArray = text.lastIndexOf(']');
-    if (firstArray !== -1 && lastArray > firstArray) {
-      try {
-        return JSON.parse(text.slice(firstArray, lastArray + 1));
-      } catch (thirdError) {
-        // fall through
-      }
-    }
-
-    return null;
-  }
-};
+const YUMMYTRACK_URL =
+  process.env.YUMMYTRACK_PETS_VPS_URL ||
+  'https://itemku-autochat-api-production.up.railway.app/api/yummytrack/pets-vps';
 
 const extractInventoryItems = (payload) => {
   const source = payload?.data ?? payload;
@@ -58,42 +26,34 @@ const extractInventoryItems = (payload) => {
 
 exports.importPetsVps = async (req, res, next) => {
   try {
-    const { data: config, error: configError } = await supabase
-      .from('config')
-      .select('yummytrack_token')
-      .single();
+    const apiKey = req.get('X-API-Key');
 
-    if (configError || !config?.yummytrack_token) {
-      return res.status(401).json({
-        success: false,
-        error: 'Token belum diset',
-      });
+    if (!apiKey) {
+      return res.status(400).json({ success: false, error: 'X-API-Key is required' });
     }
 
     const upstreamRes = await fetch(YUMMYTRACK_URL, {
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${config.yummytrack_token}`,
-        'X-API-Key': config.yummytrack_token,
+        'X-API-Key': apiKey,
         Accept: 'application/json',
       },
     });
 
-    const rawBody = await upstreamRes.text();
-    const payload = tryParseJson(rawBody);
-
-    if (!payload) {
+    let payload;
+    try {
+      payload = await upstreamRes.json();
+    } catch (parseError) {
       return res.status(502).json({
         success: false,
         error: 'Invalid JSON returned by Yummytrack',
-        details: rawBody.slice(0, 200),
       });
     }
 
     if (!upstreamRes.ok) {
       return res.status(upstreamRes.status).json({
         success: false,
-        error: payload.error || payload.message || 'Failed to fetch Yummytrack data',
+        error: payload?.error || 'Failed to fetch data',
       });
     }
 
