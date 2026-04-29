@@ -10,6 +10,7 @@ DROP FUNCTION IF EXISTS cancel_transaction CASCADE;
 DROP TABLE IF EXISTS transaction_item_breakdown CASCADE;
 DROP TABLE IF EXISTS transaction_details CASCADE;
 DROP TABLE IF EXISTS transactions CASCADE;
+DROP TABLE IF EXISTS config CASCADE;
 DROP TABLE IF EXISTS joki_orders CASCADE;
 DROP TABLE IF EXISTS joki_services CASCADE;
 DROP TABLE IF EXISTS set_items CASCADE;
@@ -51,6 +52,14 @@ CREATE TABLE set_items (
 );
 
 -- ============ TRANSACTIONS ============
+-- ============ CONFIG ============
+CREATE TABLE config (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  yummytrack_token TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE transactions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   buyer_name VARCHAR(255) NOT NULL,

@@ -58,16 +58,23 @@ const extractInventoryItems = (payload) => {
 
 exports.importPetsVps = async (req, res, next) => {
   try {
-    const apiKey = req.get('X-API-Key');
+    const { data: config, error: configError } = await supabase
+      .from('config')
+      .select('yummytrack_token')
+      .single();
 
-    if (!apiKey) {
-      return res.status(400).json({ success: false, error: 'X-API-Key is required' });
+    if (configError || !config?.yummytrack_token) {
+      return res.status(401).json({
+        success: false,
+        error: 'Token belum diset',
+      });
     }
 
     const upstreamRes = await fetch(YUMMYTRACK_URL, {
       method: 'GET',
       headers: {
-        'X-API-Key': apiKey,
+        Authorization: `Bearer ${config.yummytrack_token}`,
+        'X-API-Key': config.yummytrack_token,
         Accept: 'application/json',
       },
     });

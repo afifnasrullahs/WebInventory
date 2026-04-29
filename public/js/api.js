@@ -72,9 +72,13 @@ const API = {
   cancelJokiOrder(id) { return this.request('PUT', `/joki/orders/${id}/cancel`); },
 
   // Yummytrack import
-  importYummytrackPetsVps(apiKey) {
-    return this.request('GET', '/yummytrack/pets-vps', null, {
-      headers: { 'X-API-Key': apiKey },
+  importYummytrackPetsVps() {
+    return this.request('GET', '/yummytrack/pets-vps');
+  },
+
+  saveYummytrackToken(token, apiKey) {
+    return this.request('PUT', '/config/yummytrack-token', { token }, {
+      headers: apiKey ? { 'X-API-Key': apiKey } : {},
     });
   },
 };
