@@ -54,7 +54,6 @@ CREATE TABLE set_items (
 CREATE TABLE transactions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   buyer_name VARCHAR(255) NOT NULL,
-  tiktok_username VARCHAR(255) NOT NULL DEFAULT '',
   roblox_username VARCHAR(255) NOT NULL DEFAULT '',
   status transaction_status NOT NULL DEFAULT 'pending',
   total_price NUMERIC(12,2) NOT NULL DEFAULT 0,
@@ -114,7 +113,6 @@ CREATE INDEX idx_joki_orders_service ON joki_orders(joki_service_id);
 -- For type='set': stock deducted per set_item = quantity * set_item.qty_in_set
 CREATE OR REPLACE FUNCTION create_transaction(
   p_buyer_name TEXT,
-  p_tiktok_username TEXT,
   p_roblox_username TEXT,
   p_items JSONB
 ) RETURNS JSONB
@@ -215,8 +213,8 @@ BEGIN
   END LOOP;
 
   -- ======= PASS 4: Create transaction record =======
-  INSERT INTO transactions (buyer_name, tiktok_username, roblox_username, total_price)
-  VALUES (p_buyer_name, p_tiktok_username, p_roblox_username, v_total_price)
+  INSERT INTO transactions (buyer_name, roblox_username, total_price)
+  VALUES (p_buyer_name, p_roblox_username, v_total_price)
   RETURNING id INTO v_txn_id;
 
   -- ======= PASS 5: Create details & breakdown =======

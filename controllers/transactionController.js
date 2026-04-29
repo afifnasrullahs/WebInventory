@@ -6,34 +6,69 @@ const enrichTransactions = async (transactions) => {
   const txnIds = transactions.map((txn) => txn.id);
   const { data: details, error: detailsError } = await supabase
     .from('transaction_details')
-    .select('transaction_id, type, ref_id, quantity')
+    .select('id, transaction_id, type, ref_id, quantity')
     .in('transaction_id', txnIds)
     .order('id', { ascending: true });
 
   if (detailsError) throw detailsError;
 
-  const itemIds = [...new Set(details.filter((detail) => detail.type === 'item').map((detail) => detail.ref_id))];
-  const setIds = [...new Set(details.filter((detail) => detail.type === 'set').map((detail) => detail.ref_id))];
+  const detailIds = details.map((detail) => detail.id);
+  const itemIds = [
+    ...new Set([
+      ...details.filter((detail) => detail.type === 'item').map((detail) => detail.ref_id),
+    ]),
+  ];
 
-  const [itemsRes, setsRes] = await Promise.all([
+  const [itemsRes, breakdownRes] = await Promise.all([
     itemIds.length ? supabase.from('items').select('id, name').in('id', itemIds) : Promise.resolve({ data: [] }),
-    setIds.length ? supabase.from('sets').select('id, name').in('id', setIds) : Promise.resolve({ data: [] }),
+    detailIds.length
+      ? supabase
+          .from('transaction_item_breakdown')
+          .select('transaction_detail_id, quantity, items(name)')
+          .in('transaction_detail_id', detailIds)
+      : Promise.resolve({ data: [] }),
   ]);
 
   if (itemsRes.error) throw itemsRes.error;
-  if (setsRes.error) throw setsRes.error;
+  if (breakdownRes.error) throw breakdownRes.error;
 
   const itemNames = new Map((itemsRes.data || []).map((item) => [item.id, item.name]));
-  const setNames = new Map((setsRes.data || []).map((set) => [set.id, set.name]));
   const summaryByTxn = new Map(txnIds.map((id) => [id, []]));
+  const summaryByDetail = new Map(detailIds.map((id) => [id, []]));
+
+  (breakdownRes.data || []).forEach((row) => {
+    const itemName = row.items?.name || 'Unknown';
+    const detailSummary = summaryByDetail.get(row.transaction_detail_id) || [];
+    const existing = detailSummary.find((entry) => entry.name === itemName);
+
+    if (existing) {
+      existing.quantity += row.quantity;
+    } else {
+      detailSummary.push({ name: itemName, quantity: row.quantity, type: 'item' });
+    }
+
+    summaryByDetail.set(row.transaction_detail_id, detailSummary);
+  });
 
   details.forEach((detail) => {
-    const name = detail.type === 'item' ? itemNames.get(detail.ref_id) : setNames.get(detail.ref_id);
-    summaryByTxn.get(detail.transaction_id).push({
-      name: name || (detail.type === 'item' ? 'Deleted Item' : 'Deleted Set'),
-      quantity: detail.quantity,
-      type: detail.type,
-    });
+    const detailSummary = summaryByDetail.get(detail.id) || [];
+
+    if (detail.type === 'item' && !detailSummary.length) {
+      summaryByTxn.get(detail.transaction_id).push({
+        name: itemNames.get(detail.ref_id) || 'Deleted Item',
+        quantity: detail.quantity,
+        type: 'item',
+      });
+      return;
+    }
+
+    summaryByTxn.get(detail.transaction_id).push(
+      ...detailSummary.map((entry) => ({
+        name: entry.name,
+        quantity: entry.quantity,
+        type: 'item',
+      }))
+    );
   });
 
   return transactions.map((txn) => ({
@@ -45,10 +80,10 @@ const enrichTransactions = async (transactions) => {
 // POST /api/transactions — Calls RPC for atomic create
 exports.create = async (req, res, next) => {
   try {
-    const { buyer_name, tiktok_username, roblox_username, items } = req.body;
+    const { buyer_name, roblox_username, items } = req.body;
 
-    if (!buyer_name || !tiktok_username || !roblox_username || !items || !items.length) {
-      return res.status(400).json({ success: false, error: 'buyer_name, tiktok_username, roblox_username and items are required' });
+    if (!buyer_name || !roblox_username || !items || !items.length) {
+      return res.status(400).json({ success: false, error: 'buyer_name, roblox_username and items are required' });
     }
 
     // Validate input shape
@@ -63,7 +98,6 @@ exports.create = async (req, res, next) => {
 
     const { data, error } = await supabase.rpc('create_transaction', {
       p_buyer_name: buyer_name.trim(),
-      p_tiktok_username: tiktok_username.trim(),
       p_roblox_username: roblox_username.trim(),
       p_items: items,
     });
@@ -93,7 +127,8 @@ exports.getAll = async (req, res, next) => {
     const { data, error } = await query;
     if (error) throw error;
 
-    res.status(201).json({ success: true, data });
+    const enriched = await enrichTransactions(data || []);
+    res.json({ success: true, data: enriched });
   } catch (err) {
     next(err);
   }
@@ -106,7 +141,6 @@ exports.update = async (req, res, next) => {
     const updates = {};
 
     if (req.body.buyer_name !== undefined) updates.buyer_name = req.body.buyer_name.trim();
-    if (req.body.tiktok_username !== undefined) updates.tiktok_username = req.body.tiktok_username.trim();
     if (req.body.roblox_username !== undefined) updates.roblox_username = req.body.roblox_username.trim();
 
     if (!Object.keys(updates).length) {
@@ -174,6 +208,7 @@ exports.getById = async (req, res, next) => {
     }
 
     txn.details = details;
+    delete txn.tiktok_username;
     res.json({ success: true, data: txn });
   } catch (err) {
     next(err);
