@@ -164,6 +164,66 @@ exports.update = async (req, res, next) => {
   }
 };
 
+// PUT /api/transactions/:id/full — Cancel then recreate transaction atomically
+exports.updateFull = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { buyer_name, roblox_username, items } = req.body;
+
+    if (!buyer_name || !roblox_username || !items || !items.length) {
+      return res.status(400).json({ success: false, error: 'buyer_name, roblox_username and items are required' });
+    }
+
+    // Validate items
+    for (const item of items) {
+      if (!item.type || !item.ref_id || !item.quantity) {
+        return res.status(400).json({ success: false, error: 'Each item must have type, ref_id, and quantity' });
+      }
+    }
+
+    // 1) Cancel existing transaction (restores stock)
+    const { data: cancelData, error: cancelError } = await supabase.rpc('cancel_transaction', {
+      p_txn_id: id,
+    });
+
+    if (cancelError) {
+      const msg = cancelError.message || 'Cancel failed';
+      return res.status(400).json({ success: false, error: msg });
+    }
+
+    // 2) Create new transaction with supplied payload
+    const { data: createRes, error: createError } = await supabase.rpc('create_transaction', {
+      p_buyer_name: buyer_name.trim(),
+      p_roblox_username: roblox_username.trim(),
+      p_items: items,
+    });
+
+    if (createError) {
+      const msg = createError.message || 'Re-create transaction failed';
+      return res.status(400).json({ success: false, error: msg });
+    }
+
+    // Fetch the newly created transaction row to return enriched data
+    const newId = createRes?.id || null;
+    if (!newId) {
+      return res.json({ success: true, data: createRes });
+    }
+
+    const { data: txnRow, error: txnError } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('id', newId)
+      .single();
+
+    if (txnError) throw txnError;
+
+    const [enriched] = await enrichTransactions([txnRow]);
+    res.json({ success: true, data: enriched });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // GET /api/transactions/:id
 exports.getById = async (req, res, next) => {
   try {

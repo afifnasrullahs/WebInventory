@@ -7,5 +7,6 @@ router.get('/:id', ctrl.getById);
 router.put('/:id', ctrl.update);
 router.put('/:id/status', ctrl.updateStatus);
 router.put('/:id/cancel', ctrl.cancel);
+router.put('/:id/full', ctrl.updateFull);
 
 module.exports = router;

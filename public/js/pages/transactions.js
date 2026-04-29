@@ -347,40 +347,123 @@ const TransactionsPage = {
       const res = await API.getTransaction(id);
       const txn = res.data;
 
+      // Load catalog
+      const [itemsRes, setsRes] = await Promise.all([API.getItems(), API.getSets()]);
+      this.allItems = itemsRes.data;
+      this.allSets = setsRes.data;
+
+      // Build txnItems from txn.details
+      this.txnItems = (txn.details || []).map((d) => {
+        if (d.type === 'item') {
+          // send_amount is derived from breakdown: sent total / quantity
+          const totalSent = (d.breakdown || []).reduce((s, b) => s + (b.quantity || 0), 0);
+          const send_amount = Math.max(1, Math.floor(totalSent / (d.quantity || 1)) || 1);
+          return {
+            type: 'item',
+            ref_id: d.ref_id,
+            name: d.ref_name || 'Item',
+            quantity: d.quantity || 1,
+            send_amount,
+            price: d.price || 0,
+            stock: 0,
+          };
+        }
+
+        return {
+          type: 'set',
+          ref_id: d.ref_id,
+          name: d.ref_name || 'Set',
+          quantity: d.quantity || 1,
+          send_amount: 1,
+          price: d.price || 0,
+          stock: 0,
+        };
+      });
+
       App.openModal('Edit Transaksi', `
         <div class="form-group">
           <label>Nama Buyer</label>
-          <input type="text" class="form-control" id="editTxnBuyerName" value="${txn.buyer_name || ''}" placeholder="Nama pembeli">
+          <input type="text" class="form-control" id="txnBuyerName" value="${txn.buyer_name || ''}" placeholder="Nama pembeli">
         </div>
         <div class="form-group">
           <label>Username Roblox</label>
-          <input type="text" class="form-control" id="editTxnRobloxUsername" value="${txn.roblox_username || ''}" placeholder="Username Roblox">
+          <input type="text" class="form-control" id="txnRobloxUsername" value="${txn.roblox_username || ''}" placeholder="Username Roblox">
         </div>
-        <div style="padding:12px 14px;border:1px solid var(--border-subtle);border-radius:var(--radius-sm);background:var(--bg-input);font-size:13px;color:var(--text-secondary);">
-          Item transaksi tidak diubah dari form edit ini. Gunakan transaksi baru bila perlu ubah isi item.
+
+        <hr style="border-color:var(--border-subtle);margin:18px 0;">
+
+        <h4 class="section-title"><i class="bx bx-cart-add"></i>Tambah / Ubah Produk</h4>
+        <div style="background:var(--bg-input);border:1px solid var(--border-subtle);border-radius:var(--radius-sm);padding:14px;margin-bottom:18px;">
+          <div class="form-row" style="grid-template-columns: 100px 1fr auto; align-items:end;">
+            <div class="form-group" style="margin-bottom:0">
+              <label style="font-size:11px">Tipe</label>
+              <select class="form-control" id="txnProductType" style="width:100%">
+                <option value="item">Item</option>
+                <option value="set">Set</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label style="font-size:11px">Pilih Produk</label>
+              <select class="form-control" id="txnProductSelect">
+                ${this.allItems.map((i) => `<option value="${i.id}" data-price="${i.price}" data-stock="${i.stock}" data-sendqty="${i.send_quantity || 1}">${i.name} (Stok: ${i.stock})</option>`).join('')}
+              </select>
+            </div>
+            <button class="btn btn-sm btn-primary" id="txnAddProductBtn" style="height:38px;"><i class="bx bx-plus"></i></button>
+          </div>
+        </div>
+
+        <h4 class="section-title"><i class="bx bx-list-ul"></i>Produk Dipilih</h4>
+        <div id="txnItemsList" class="txn-items-list"></div>
+
+        <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-subtle);display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:14px;color:var(--text-secondary)">Total Harga:</span>
+          <span class="price" style="font-size:22px;color:var(--accent-secondary)" id="txnTotalPrice">${App.formatPrice(0)}</span>
         </div>
       `, `
         <button class="btn btn-secondary" onclick="App.closeModal()">Batal</button>
-        <button class="btn btn-primary" id="saveTxnEditBtn">Simpan Perubahan</button>
+        <button class="btn btn-primary" id="submitTxnBtn"><i class="bx bx-check"></i>Simpan Perubahan</button>
       `, 'lg');
 
-      document.getElementById('saveTxnEditBtn').addEventListener('click', () => this.saveTransactionEdit(id));
+      // Render current items
+      this.renderTxnItems();
+
+      document.getElementById('txnProductType').addEventListener('change', () => this.updateProductSelect());
+      document.getElementById('txnAddProductBtn').addEventListener('click', () => this.addProduct());
+      document.getElementById('submitTxnBtn').addEventListener('click', () => this.submitTransactionEdit(id));
     } catch (err) {
       App.toast(err.message, 'error');
     }
   },
 
-  async saveTransactionEdit(id) {
-    const buyer_name = document.getElementById('editTxnBuyerName').value.trim();
-    const roblox_username = document.getElementById('editTxnRobloxUsername').value.trim();
+  async submitTransactionEdit(id) {
+    const buyer_name = document.getElementById('txnBuyerName').value.trim();
+    const roblox_username = document.getElementById('txnRobloxUsername').value.trim();
 
-    if (!buyer_name || !roblox_username) {
-      App.toast('Nama buyer dan username Roblox harus diisi', 'error');
+    if (!buyer_name) {
+      App.toast('Nama buyer harus diisi', 'error');
+      return;
+    }
+    if (!roblox_username) {
+      App.toast('Username Roblox harus diisi', 'error');
+      return;
+    }
+    if (!this.txnItems.length) {
+      App.toast('Tambahkan minimal 1 produk', 'error');
       return;
     }
 
     try {
-      await API.updateTransaction(id, { buyer_name, roblox_username });
+      await API.updateTransactionFull(id, {
+        buyer_name,
+        roblox_username,
+        items: this.txnItems.map((i) => ({
+          type: i.type,
+          ref_id: i.ref_id,
+          quantity: i.quantity,
+          price: i.price,
+          send_amount: i.type === 'item' ? i.send_amount : undefined,
+        })),
+      });
       App.toast('Transaksi berhasil diupdate');
       App.closeModal();
       await this.loadData();

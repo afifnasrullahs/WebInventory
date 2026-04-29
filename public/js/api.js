@@ -62,6 +62,7 @@ const API = {
   },
   getTransaction(id) { return this.request('GET', `/transactions/${id}`); },
   updateTransaction(id, data) { return this.request('PUT', `/transactions/${id}`, data); },
+  updateTransactionFull(id, data) { return this.request('PUT', `/transactions/${id}/full`, data); },
   updateTransactionStatus(id, status) { return this.request('PUT', `/transactions/${id}/status`, { status }); },
   cancelTransaction(id) { return this.request('PUT', `/transactions/${id}/cancel`); },
 
