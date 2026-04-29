@@ -170,8 +170,16 @@ const SetsPage = {
     if (!select) return;
 
     const filteredItems = this.getFilteredAvailableItems();
+    const previousValue = select.value;
     select.innerHTML = `<option value="">-- Pilih Item --</option>
       ${filteredItems.map((i) => `<option value="${i.id}" data-name="${i.name}">${i.name} (Stok: ${i.stock})</option>`).join('')}`;
+
+    if (filteredItems.length) {
+      const stillExists = filteredItems.some((item) => item.id === previousValue);
+      select.value = stillExists ? previousValue : filteredItems[0].id;
+    } else {
+      select.value = '';
+    }
   },
 
   renderSetItemsInForm() {

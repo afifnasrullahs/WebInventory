@@ -6,6 +6,7 @@ const TransactionsPage = {
   currentFilter: '',
   searchQuery: '',
   txnItems: [],
+  productSearchQuery: '',
 
   async render() {
     const content = document.getElementById('content');
@@ -134,6 +135,7 @@ const TransactionsPage = {
 
   async showCreateForm() {
     this.txnItems = [];
+    this.productSearchQuery = '';
 
     try {
       const [itemsRes, setsRes] = await Promise.all([API.getItems(), API.getSets()]);
@@ -158,6 +160,9 @@ const TransactionsPage = {
 
       <h4 class="section-title"><i class="bx bx-cart-add"></i>Tambah Produk</h4>
       <div style="background:var(--bg-input);border:1px solid var(--border-subtle);border-radius:var(--radius-sm);padding:14px;margin-bottom:18px;">
+        <div class="form-group" style="margin-bottom:10px;">
+          <input type="text" class="form-control search-input" id="txnProductSearch" placeholder="Cari produk yang ingin ditambahkan...">
+        </div>
         <div class="form-row" style="grid-template-columns: 100px 1fr auto; align-items:end;">
           <div class="form-group" style="margin-bottom:0">
             <label style="font-size:11px">Tipe</label>
@@ -189,22 +194,39 @@ const TransactionsPage = {
     `, 'lg');
 
     document.getElementById('txnProductType').addEventListener('change', () => this.updateProductSelect());
+    document.getElementById('txnProductSearch').addEventListener('input', (e) => {
+      this.productSearchQuery = e.target.value.trim().toLowerCase();
+      this.updateProductSelect();
+    });
     document.getElementById('txnAddProductBtn').addEventListener('click', () => this.addProduct());
     document.getElementById('submitTxnBtn').addEventListener('click', () => this.submitTransaction());
+  },
+
+  getFilteredProducts(type) {
+    const products = type === 'item' ? this.allItems : this.allSets;
+    if (!this.productSearchQuery) return products;
+    return products.filter((product) => (product.name || '').toLowerCase().includes(this.productSearchQuery));
   },
 
   updateProductSelect() {
     const type = document.getElementById('txnProductType').value;
     const select = document.getElementById('txnProductSelect');
+    const previousValue = select.value;
+    const filteredProducts = this.getFilteredProducts(type);
 
     if (type === 'item') {
-      select.innerHTML = this.allItems.map((i) =>
+      select.innerHTML = filteredProducts.map((i) =>
         `<option value="${i.id}" data-price="${i.price}" data-stock="${i.stock}" data-sendqty="${i.send_quantity || 1}">${i.name} (Stok: ${i.stock})</option>`
       ).join('');
     } else {
-      select.innerHTML = this.allSets.map((s) =>
+      select.innerHTML = filteredProducts.map((s) =>
         `<option value="${s.id}" data-price="${s.price}" data-stock="${s.calculated_stock}" data-sendqty="1">${s.name} (Stok: ${s.calculated_stock})</option>`
       ).join('');
+    }
+
+    if (filteredProducts.length) {
+      const stillExists = filteredProducts.some((product) => product.id === previousValue);
+      select.value = stillExists ? previousValue : filteredProducts[0].id;
     }
   },
 
@@ -351,6 +373,7 @@ const TransactionsPage = {
       const [itemsRes, setsRes] = await Promise.all([API.getItems(), API.getSets()]);
       this.allItems = itemsRes.data;
       this.allSets = setsRes.data;
+      this.productSearchQuery = '';
 
       // Build txnItems from txn.details
       this.txnItems = (txn.details || []).map((d) => {
@@ -394,6 +417,9 @@ const TransactionsPage = {
 
         <h4 class="section-title"><i class="bx bx-cart-add"></i>Tambah / Ubah Produk</h4>
         <div style="background:var(--bg-input);border:1px solid var(--border-subtle);border-radius:var(--radius-sm);padding:14px;margin-bottom:18px;">
+          <div class="form-group" style="margin-bottom:10px;">
+            <input type="text" class="form-control search-input" id="txnProductSearch" placeholder="Cari produk yang ingin ditambahkan...">
+          </div>
           <div class="form-row" style="grid-template-columns: 100px 1fr auto; align-items:end;">
             <div class="form-group" style="margin-bottom:0">
               <label style="font-size:11px">Tipe</label>
@@ -428,6 +454,10 @@ const TransactionsPage = {
       this.renderTxnItems();
 
       document.getElementById('txnProductType').addEventListener('change', () => this.updateProductSelect());
+      document.getElementById('txnProductSearch').addEventListener('input', (e) => {
+        this.productSearchQuery = e.target.value.trim().toLowerCase();
+        this.updateProductSelect();
+      });
       document.getElementById('txnAddProductBtn').addEventListener('click', () => this.addProduct());
       document.getElementById('submitTxnBtn').addEventListener('click', () => this.submitTransactionEdit(id));
     } catch (err) {

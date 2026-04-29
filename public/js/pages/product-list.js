@@ -47,16 +47,22 @@ const ProductListPage = {
         type: 'Item',
         name: item.name,
         price: item.price,
+        quantity: item.send_quantity || 1,
+        stock: item.stock,
       })),
       ...this.sets.map((set) => ({
         type: 'Set',
         name: set.name,
         price: set.price,
+        quantity: (set.items || []).reduce((total, item) => total + (item.quantity || 0), 0),
+        stock: set.calculated_stock,
       })),
       ...this.jokiServices.map((service) => ({
         type: 'Joki',
         name: service.name,
         price: service.price,
+        quantity: '-',
+        stock: '-',
       })),
     ];
   },
@@ -80,6 +86,8 @@ const ProductListPage = {
           <tr>
             <th>Tipe</th>
             <th>Nama Produk</th>
+            <th>Quantity</th>
+            <th>Stok</th>
             <th>Harga</th>
           </tr>
         </thead>
@@ -88,6 +96,8 @@ const ProductListPage = {
             <tr>
               <td><span class="badge ${this.getTypeBadgeClass(row.type)}">${row.type}</span></td>
               <td><strong>${row.name}</strong></td>
+              <td>${row.quantity}</td>
+              <td>${row.stock}</td>
               <td class="price">${App.formatPrice(row.price)}</td>
             </tr>
           `).join('')}
