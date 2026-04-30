@@ -8,6 +8,7 @@ const TransactionsPage = {
   txnItems: [],
   productSearchQuery: '',
   sort: { sortBy: 'created_at', sortDir: 'desc' },
+  summaryHydratedIds: new Set(),
 
   async render() {
     const content = document.getElementById('content');
@@ -143,6 +144,65 @@ const TransactionsPage = {
         </tbody>
       </table>
     `;
+
+    // Fallback: hydrate missing summaries from transaction detail endpoint.
+    // This handles legacy rows where list summary can be empty.
+    const missingIds = transactions
+      .filter((txn) => !(txn.summary || []).length && !this.summaryHydratedIds.has(txn.id))
+      .map((txn) => txn.id);
+    if (missingIds.length) {
+      this.hydrateMissingSummaries(missingIds);
+    }
+  },
+
+  async hydrateMissingSummaries(ids) {
+    if (!ids?.length) return;
+    ids.forEach((id) => this.summaryHydratedIds.add(id));
+
+    try {
+      const responses = await Promise.all(
+        ids.map((id) => API.getTransaction(id).catch(() => null))
+      );
+
+      const byId = new Map(this.transactions.map((t) => [t.id, t]));
+
+      responses.forEach((res) => {
+        const txn = res?.data;
+        if (!txn?.id) return;
+
+        const details = txn.details || [];
+        const summary = [];
+
+        details.forEach((d) => {
+          const breakdown = d.breakdown || [];
+          if (breakdown.length) {
+            breakdown.forEach((b) => {
+              summary.push({
+                name: b.item_name || 'Unknown',
+                quantity: b.quantity || 0,
+                type: 'item',
+              });
+            });
+            return;
+          }
+
+          summary.push({
+            name: d.ref_name || (d.type === 'set' ? 'Set' : 'Item'),
+            quantity: d.quantity || 0,
+            type: d.type || 'item',
+          });
+        });
+
+        const local = byId.get(txn.id);
+        if (local && summary.length) {
+          local.summary = summary;
+        }
+      });
+
+      this.renderTable();
+    } catch (_) {
+      // Keep silent; table still renders with "-"
+    }
   },
 
   async showCreateForm() {
