@@ -8,6 +8,8 @@ const itemRoutes = require('./routes/items');
 const setRoutes = require('./routes/sets');
 const transactionRoutes = require('./routes/transactions');
 const jokiRoutes = require('./routes/joki');
+const activityRoutes = require('./routes/activities');
+const incomeRoutes = require('./routes/income');
 const configRoutes = require('./routes/config');
 const yummytrackRoutes = require('./routes/yummytrack');
 
@@ -29,6 +31,8 @@ app.use('/api/items', itemRoutes);
 app.use('/api/sets', setRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/joki', jokiRoutes);
+app.use('/api/activities', activityRoutes);
+app.use('/api/income', incomeRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/yummytrack', yummytrackRoutes);
 

@@ -13,6 +13,7 @@ DROP TABLE IF EXISTS transactions CASCADE;
 DROP TABLE IF EXISTS config CASCADE;
 DROP TABLE IF EXISTS joki_orders CASCADE;
 DROP TABLE IF EXISTS joki_services CASCADE;
+DROP TABLE IF EXISTS activity_logs CASCADE;
 DROP TABLE IF EXISTS set_items CASCADE;
 DROP TABLE IF EXISTS sets CASCADE;
 DROP TABLE IF EXISTS items CASCADE;
@@ -107,6 +108,19 @@ CREATE TABLE joki_orders (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ============ ACTIVITY / ABSENSI ============
+CREATE TABLE activity_logs (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  activity_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  name VARCHAR(64) NOT NULL,
+  role VARCHAR(16) NOT NULL CHECK (role IN ('admin', 'host')),
+  work_done TEXT NOT NULL,
+  work_hours NUMERIC(5,2),
+  approved BOOLEAN NOT NULL DEFAULT FALSE,
+  approved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ============ INDEXES ============
 CREATE INDEX idx_set_items_set_id ON set_items(set_id);
 CREATE INDEX idx_set_items_item_id ON set_items(item_id);
@@ -115,6 +129,8 @@ CREATE INDEX idx_transaction_details_txn_id ON transaction_details(transaction_i
 CREATE INDEX idx_breakdown_detail_id ON transaction_item_breakdown(transaction_detail_id);
 CREATE INDEX idx_joki_orders_status ON joki_orders(status);
 CREATE INDEX idx_joki_orders_service ON joki_orders(joki_service_id);
+CREATE INDEX idx_activity_logs_date ON activity_logs(activity_date);
+CREATE INDEX idx_activity_logs_approved ON activity_logs(approved);
 
 -- ============ RPC: CREATE TRANSACTION (Atomic) ============
 -- p_items format: [{ type, ref_id, quantity, price, send_amount? }]

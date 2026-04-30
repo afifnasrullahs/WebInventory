@@ -22,6 +22,7 @@ async function initDatabase() {
     console.log('  - transaction_item_breakdown');
     console.log('  - joki_services');
     console.log('  - joki_orders');
+    console.log('  - activity_logs');
   } catch (err) {
     console.error('❌ Failed to initialize database:', err.message);
     process.exit(1);

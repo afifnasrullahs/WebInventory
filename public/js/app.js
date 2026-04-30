@@ -9,6 +9,8 @@ const App = {
     '/transactions': TransactionsPage,
     '/joki': JokiPage,
     '/products': ProductListPage,
+    '/activity': ActivityPage,
+    '/income': IncomePage,
   },
 
   init() {

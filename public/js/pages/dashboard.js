@@ -42,7 +42,13 @@ const DashboardPage = {
 
       const pendingTxn = txns.filter((t) => t.status === 'pending').length;
       const activeJoki = jokis.filter((j) => j.status === 'pending' || j.status === 'in_progress').length;
-      const totalRevenue = txns.filter((t) => t.status === 'done').reduce((s, t) => s + parseFloat(t.total_price), 0);
+      const revenueTransactions = txns
+        .filter((t) => t.status === 'done')
+        .reduce((s, t) => s + (parseFloat(t.total_price) || 0), 0);
+      const revenueJoki = jokis
+        .filter((j) => j.status === 'done')
+        .reduce((s, j) => s + (parseFloat(j.price) || 0), 0);
+      const totalRevenue = revenueTransactions + revenueJoki;
 
       document.getElementById('statsGrid').innerHTML = `
         <div class="stat-card">

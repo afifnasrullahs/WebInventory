@@ -103,4 +103,23 @@ const API = {
       headers: apiKey ? { 'X-API-Key': apiKey } : {},
     });
   },
+
+  // Activity / Absensi
+  getActivities(opts = {}) {
+    const q = this.buildQuery({
+      status: opts.status,
+      sortBy: opts.sortBy,
+      sortDir: opts.sortDir,
+      limit: opts.limit,
+    });
+    return this.request('GET', `/activities${q}`);
+  },
+  createActivity(data) { return this.request('POST', '/activities', data); },
+  approveActivity(id, code) { return this.request('PUT', `/activities/${id}/approve`, { code }); },
+
+  // Income report
+  getIncomeReport(opts = {}) {
+    const q = this.buildQuery({ from: opts.from, to: opts.to });
+    return this.request('GET', `/income${q}`);
+  },
 };
