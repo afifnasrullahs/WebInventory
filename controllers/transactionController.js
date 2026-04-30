@@ -1,5 +1,89 @@
 const supabase = require('../config/database');
 
+const ensureTransactionDetails = async (txnId, items) => {
+  if (!txnId || !Array.isArray(items) || !items.length) return;
+
+  const { data: existing, error: countErr } = await supabase
+    .from('transaction_details')
+    .select('id')
+    .eq('transaction_id', txnId)
+    .limit(1);
+  if (countErr) throw countErr;
+  if (existing && existing.length) return; // Already created by RPC.
+
+  const setIds = [...new Set(items.filter((i) => i.type === 'set').map((i) => i.ref_id))];
+  const itemIds = [...new Set(items.filter((i) => i.type === 'item').map((i) => i.ref_id))];
+
+  const [setsRes, itemDefaultsRes] = await Promise.all([
+    setIds.length
+      ? supabase
+          .from('set_items')
+          .select('set_id,item_id,quantity')
+          .in('set_id', setIds)
+      : Promise.resolve({ data: [] }),
+    itemIds.length
+      ? supabase
+          .from('items')
+          .select('id,send_quantity')
+          .in('id', itemIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  if (setsRes.error) throw setsRes.error;
+  if (itemDefaultsRes.error) throw itemDefaultsRes.error;
+
+  const itemSendDefault = new Map((itemDefaultsRes.data || []).map((r) => [r.id, r.send_quantity || 1]));
+  const setItemsBySet = new Map();
+  (setsRes.data || []).forEach((row) => {
+    const arr = setItemsBySet.get(row.set_id) || [];
+    arr.push(row);
+    setItemsBySet.set(row.set_id, arr);
+  });
+
+  for (const entry of items) {
+    const qty = parseInt(entry.quantity) || 1;
+    const price = Number(entry.price) || 0;
+
+    const { data: detail, error: detailErr } = await supabase
+      .from('transaction_details')
+      .insert({
+        transaction_id: txnId,
+        type: entry.type,
+        ref_id: entry.ref_id,
+        quantity: qty,
+        price,
+      })
+      .select('id')
+      .single();
+    if (detailErr) throw detailErr;
+
+    if (entry.type === 'item') {
+      const sendAmount = parseInt(entry.send_amount) || itemSendDefault.get(entry.ref_id) || 1;
+      const { error: brErr } = await supabase
+        .from('transaction_item_breakdown')
+        .insert({
+          transaction_detail_id: detail.id,
+          item_id: entry.ref_id,
+          quantity: qty * sendAmount,
+        });
+      if (brErr) throw brErr;
+      continue;
+    }
+
+    const setRows = setItemsBySet.get(entry.ref_id) || [];
+    if (!setRows.length) continue;
+
+    const breakdownRows = setRows.map((si) => ({
+      transaction_detail_id: detail.id,
+      item_id: si.item_id,
+      quantity: qty * (parseInt(si.quantity) || 1),
+    }));
+    const { error: setBrErr } = await supabase
+      .from('transaction_item_breakdown')
+      .insert(breakdownRows);
+    if (setBrErr) throw setBrErr;
+  }
+};
+
 const enrichTransactions = async (transactions) => {
   if (!transactions.length) return transactions;
 
@@ -125,6 +209,8 @@ exports.create = async (req, res, next) => {
       return res.status(400).json({ success: false, error: msg });
     }
 
+    await ensureTransactionDetails(data?.id, items);
+
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -223,6 +309,8 @@ exports.updateFull = async (req, res, next) => {
       const msg = createError.message || 'Re-create transaction failed';
       return res.status(400).json({ success: false, error: msg });
     }
+
+    await ensureTransactionDetails(createRes?.id, items);
 
     // Fetch the newly created transaction row to return enriched data
     const newId = createRes?.id || null;
