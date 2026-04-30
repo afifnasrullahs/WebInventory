@@ -84,6 +84,91 @@ const ensureTransactionDetails = async (txnId, items) => {
   }
 };
 
+const cancelTransactionWithRestore = async (txnId) => {
+  // 1) Try DB RPC first (atomic if function is correct).
+  const { data: rpcData, error: rpcError } = await supabase.rpc('cancel_transaction', {
+    p_txn_id: txnId,
+  });
+
+  if (!rpcError) {
+    return rpcData;
+  }
+
+  // 2) Fallback path: manual restore + cancel for environments
+  // where DB function is outdated/incomplete.
+  const { data: txn, error: txnErr } = await supabase
+    .from('transactions')
+    .select('id,status,buyer_name,total_price,created_at')
+    .eq('id', txnId)
+    .single();
+  if (txnErr) throw txnErr;
+  if (!txn) {
+    const e = new Error('Transaksi tidak ditemukan');
+    e.status = 404;
+    throw e;
+  }
+  if (txn.status !== 'pending') {
+    const e = new Error('Hanya transaksi pending yang bisa di-cancel');
+    e.status = 400;
+    throw e;
+  }
+
+  const { data: details, error: detailsErr } = await supabase
+    .from('transaction_details')
+    .select('id')
+    .eq('transaction_id', txnId);
+  if (detailsErr) throw detailsErr;
+
+  const detailIds = (details || []).map((d) => d.id);
+
+  if (detailIds.length) {
+    const { data: breakdown, error: brErr } = await supabase
+      .from('transaction_item_breakdown')
+      .select('item_id,quantity')
+      .in('transaction_detail_id', detailIds);
+    if (brErr) throw brErr;
+
+    const qtyByItem = new Map();
+    (breakdown || []).forEach((row) => {
+      const key = row.item_id;
+      qtyByItem.set(key, (qtyByItem.get(key) || 0) + (parseInt(row.quantity) || 0));
+    });
+
+    for (const [itemId, qty] of qtyByItem.entries()) {
+      const { data: itemRow, error: itemGetErr } = await supabase
+        .from('items')
+        .select('stock')
+        .eq('id', itemId)
+        .single();
+      if (itemGetErr) throw itemGetErr;
+
+      const newStock = (parseInt(itemRow?.stock) || 0) + qty;
+      const { error: itemUpdErr } = await supabase
+        .from('items')
+        .update({ stock: newStock })
+        .eq('id', itemId);
+      if (itemUpdErr) throw itemUpdErr;
+    }
+  }
+
+  const { data: updatedTxn, error: updErr } = await supabase
+    .from('transactions')
+    .update({ status: 'cancelled' })
+    .eq('id', txnId)
+    .eq('status', 'pending')
+    .select('*')
+    .single();
+  if (updErr) throw updErr;
+
+  return {
+    id: updatedTxn.id,
+    buyer_name: updatedTxn.buyer_name,
+    total_price: updatedTxn.total_price,
+    status: updatedTxn.status,
+    created_at: updatedTxn.created_at,
+  };
+};
+
 const enrichTransactions = async (transactions) => {
   if (!transactions.length) return transactions;
 
@@ -289,14 +374,7 @@ exports.updateFull = async (req, res, next) => {
     }
 
     // 1) Cancel existing transaction (restores stock)
-    const { data: cancelData, error: cancelError } = await supabase.rpc('cancel_transaction', {
-      p_txn_id: id,
-    });
-
-    if (cancelError) {
-      const msg = cancelError.message || 'Cancel failed';
-      return res.status(400).json({ success: false, error: msg });
-    }
+    const cancelData = await cancelTransactionWithRestore(id);
 
     // 2) Create new transaction with supplied payload
     const { data: createRes, error: createError } = await supabase.rpc('create_transaction', {
@@ -418,14 +496,7 @@ exports.updateStatus = async (req, res, next) => {
 // PUT /api/transactions/:id/cancel — Calls RPC for atomic cancel
 exports.cancel = async (req, res, next) => {
   try {
-    const { data, error } = await supabase.rpc('cancel_transaction', {
-      p_txn_id: req.params.id,
-    });
-
-    if (error) {
-      const msg = error.message || 'Cancel failed';
-      return res.status(400).json({ success: false, error: msg });
-    }
+    const data = await cancelTransactionWithRestore(req.params.id);
 
     res.json({ success: true, data });
   } catch (err) {
