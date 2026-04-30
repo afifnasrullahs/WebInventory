@@ -6,6 +6,8 @@ const JokiPage = {
   orderFilter: '',
   searchQuery: '',
   servicePickerQuery: '',
+  sortOrders: { sortBy: 'created_at', sortDir: 'desc' },
+  sortServices: { sortBy: 'created_at', sortDir: 'desc' },
 
   async render() {
     const content = document.getElementById('content');
@@ -27,6 +29,12 @@ const JokiPage = {
       <div class="table-wrapper" style="margin-bottom:20px;">
         <div class="table-toolbar">
           <input type="text" class="form-control search-input" id="jokiSearch" placeholder="Cari order, customer, username, atau layanan...">
+          <select class="form-control" id="jokiSort" style="width:240px;min-width:240px;">
+            <option value="created_at:desc">Terbaru</option>
+            <option value="created_at:asc">Terlama</option>
+            <option value="price:asc">Harga: kecil → besar</option>
+            <option value="price:desc">Harga: besar → kecil</option>
+          </select>
         </div>
       </div>
       <div id="jokiContent">${App.loading()}</div>
@@ -40,11 +48,23 @@ const JokiPage = {
 
     document.getElementById('createJokiOrderBtn').addEventListener('click', () => this.showCreateOrder());
     document.getElementById('jokiSearch').addEventListener('input', () => this.renderContent());
+    document.getElementById('jokiSort').addEventListener('change', () => {
+      const [sortBy, sortDir] = (document.getElementById('jokiSort').value || 'created_at:desc').split(':');
+      if (this.activeTab === 'orders') {
+        this.sortOrders = { sortBy, sortDir };
+      } else {
+        this.sortServices = { sortBy, sortDir };
+      }
+      this.loadData();
+    });
 
     document.querySelectorAll('.page-tab').forEach((tab) => {
       tab.addEventListener('click', () => {
         this.activeTab = tab.dataset.tab;
         this.updateTabs();
+        const current = this.activeTab === 'orders' ? this.sortOrders : this.sortServices;
+        const select = document.getElementById('jokiSort');
+        if (select) select.value = `${current.sortBy}:${current.sortDir}`;
         this.renderContent();
       });
     });
@@ -60,12 +80,15 @@ const JokiPage = {
 
   async loadData() {
     try {
+      const currentSort = this.activeTab === 'orders' ? this.sortOrders : this.sortServices;
       const [servicesRes, ordersRes] = await Promise.all([
-        API.getJokiServices(),
-        API.getJokiOrders(this.orderFilter),
+        API.getJokiServices(this.sortServices),
+        API.getJokiOrders(this.orderFilter, this.sortOrders),
       ]);
       this.services = servicesRes.data;
       this.orders = ordersRes.data;
+      const select = document.getElementById('jokiSort');
+      if (select) select.value = `${currentSort.sortBy}:${currentSort.sortDir}`;
       this.renderContent();
     } catch (err) {
       App.toast(err.message, 'error');

@@ -1,6 +1,7 @@
 // Items Page
 const ItemsPage = {
   items: [],
+  sort: { sortBy: 'created_at', sortDir: 'desc' },
 
   async render() {
     const content = document.getElementById('content');
@@ -18,6 +19,16 @@ const ItemsPage = {
       <div class="table-wrapper">
         <div class="table-toolbar">
           <input type="text" class="form-control search-input" id="itemSearch" placeholder="Cari item...">
+          <select class="form-control" id="itemSort" style="width:220px;min-width:220px;">
+            <option value="created_at:desc">Terbaru</option>
+            <option value="created_at:asc">Terlama</option>
+            <option value="price:asc">Harga: kecil → besar</option>
+            <option value="price:desc">Harga: besar → kecil</option>
+            <option value="stock:asc">Stok: kecil → besar</option>
+            <option value="stock:desc">Stok: besar → kecil</option>
+            <option value="name:asc">Nama: A → Z</option>
+            <option value="name:desc">Nama: Z → A</option>
+          </select>
         </div>
         <div id="itemsTable">${App.loading()}</div>
       </div>
@@ -25,13 +36,18 @@ const ItemsPage = {
     document.getElementById('addItemBtn').addEventListener('click', () => this.showForm());
     document.getElementById('importYummytrackBtn').addEventListener('click', () => this.showYummytrackImportForm());
     document.getElementById('itemSearch').addEventListener('input', this.debounce(() => this.loadData(), 300));
+    document.getElementById('itemSort').addEventListener('change', () => {
+      const [sortBy, sortDir] = (document.getElementById('itemSort').value || 'created_at:desc').split(':');
+      this.sort = { sortBy, sortDir };
+      this.loadData();
+    });
     await this.loadData();
   },
 
   async loadData() {
     try {
       const search = document.getElementById('itemSearch')?.value || '';
-      const res = await API.getItems(search);
+      const res = await API.getItems(search, this.sort);
       this.items = res.data;
       this.renderTable();
     } catch (err) {

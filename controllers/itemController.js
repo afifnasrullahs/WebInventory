@@ -3,8 +3,12 @@ const supabase = require('../config/database');
 // GET /api/items
 exports.getAll = async (req, res, next) => {
   try {
-    const { search } = req.query;
-    let query = supabase.from('items').select('*').order('created_at', { ascending: false });
+    const { search, sortBy, sortDir } = req.query;
+    const allowedSort = new Set(['created_at', 'price', 'stock', 'name']);
+    const column = allowedSort.has(sortBy) ? sortBy : 'created_at';
+    const ascending = `${sortDir}`.toLowerCase() === 'asc';
+
+    let query = supabase.from('items').select('*').order(column, { ascending });
 
     if (search) {
       query = query.ilike('name', `%${search}%`);

@@ -2,6 +2,14 @@
 const API = {
   baseUrl: '/api',
 
+  buildQuery(params = {}) {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v !== undefined && v !== null && `${v}` !== '')
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join('&');
+    return qs ? `?${qs}` : '';
+  },
+
   async request(method, endpoint, data = null, requestOptions = {}) {
     const isGet = method === 'GET';
     const url = isGet
@@ -37,8 +45,8 @@ const API = {
   },
 
   // Items
-  getItems(search = '') {
-    const q = search ? `?search=${encodeURIComponent(search)}` : '';
+  getItems(search = '', opts = {}) {
+    const q = this.buildQuery({ search, sortBy: opts.sortBy, sortDir: opts.sortDir });
     return this.request('GET', `/items${q}`);
   },
   createItem(data) { return this.request('POST', '/items', data); },
@@ -46,7 +54,10 @@ const API = {
   deleteItem(id) { return this.request('DELETE', `/items/${id}`); },
 
   // Sets
-  getSets() { return this.request('GET', '/sets'); },
+  getSets(opts = {}) {
+    const q = this.buildQuery({ sortBy: opts.sortBy, sortDir: opts.sortDir });
+    return this.request('GET', `/sets${q}`);
+  },
   createSet(data) { return this.request('POST', '/sets', data); },
   getSet(id) { return this.request('GET', `/sets/${id}`); },
   updateSet(id, data) { return this.request('PUT', `/sets/${id}`, data); },
@@ -56,8 +67,8 @@ const API = {
 
   // Transactions
   createTransaction(data) { return this.request('POST', '/transactions', data); },
-  getTransactions(status = '') {
-    const q = status ? `?status=${status}` : '';
+  getTransactions(status = '', opts = {}) {
+    const q = this.buildQuery({ status, sortBy: opts.sortBy, sortDir: opts.sortDir });
     return this.request('GET', `/transactions${q}`);
   },
   getTransaction(id) { return this.request('GET', `/transactions/${id}`); },
@@ -67,14 +78,17 @@ const API = {
   cancelTransaction(id) { return this.request('PUT', `/transactions/${id}/cancel`); },
 
   // Joki Services
-  getJokiServices() { return this.request('GET', '/joki/services'); },
+  getJokiServices(opts = {}) {
+    const q = this.buildQuery({ sortBy: opts.sortBy, sortDir: opts.sortDir });
+    return this.request('GET', `/joki/services${q}`);
+  },
   createJokiService(data) { return this.request('POST', '/joki/services', data); },
   updateJokiService(id, data) { return this.request('PUT', `/joki/services/${id}`, data); },
   deleteJokiService(id) { return this.request('DELETE', `/joki/services/${id}`); },
 
   // Joki Orders
-  getJokiOrders(status = '') {
-    const q = status ? `?status=${status}` : '';
+  getJokiOrders(status = '', opts = {}) {
+    const q = this.buildQuery({ status, sortBy: opts.sortBy, sortDir: opts.sortDir });
     return this.request('GET', `/joki/orders${q}`);
   },
   createJokiOrder(data) { return this.request('POST', '/joki/orders', data); },

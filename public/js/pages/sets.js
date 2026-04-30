@@ -5,6 +5,7 @@ const SetsPage = {
   pendingSetItems: [], // items to add when creating a new set
   searchQuery: '',
   setItemSearchQuery: '',
+  sort: { sortBy: 'created_at', sortDir: 'desc' },
 
   async render() {
     const content = document.getElementById('content');
@@ -19,18 +20,33 @@ const SetsPage = {
       <div class="table-wrapper" style="margin-bottom:20px;">
         <div class="table-toolbar">
           <input type="text" class="form-control search-input" id="setSearch" placeholder="Cari set atau item dalam set...">
+          <select class="form-control" id="setSort" style="width:220px;min-width:220px;">
+            <option value="created_at:desc">Terbaru</option>
+            <option value="created_at:asc">Terlama</option>
+            <option value="price:asc">Harga: kecil → besar</option>
+            <option value="price:desc">Harga: besar → kecil</option>
+            <option value="calculated_stock:asc">Stok: kecil → besar</option>
+            <option value="calculated_stock:desc">Stok: besar → kecil</option>
+            <option value="name:asc">Nama: A → Z</option>
+            <option value="name:desc">Nama: Z → A</option>
+          </select>
         </div>
       </div>
       <div id="setsContainer">${App.loading()}</div>
     `;
     document.getElementById('addSetBtn').addEventListener('click', () => this.showForm());
     document.getElementById('setSearch').addEventListener('input', () => this.renderSets());
+    document.getElementById('setSort').addEventListener('change', () => {
+      const [sortBy, sortDir] = (document.getElementById('setSort').value || 'created_at:desc').split(':');
+      this.sort = { sortBy, sortDir };
+      this.loadData();
+    });
     await this.loadData();
   },
 
   async loadData() {
     try {
-      const [setsRes, itemsRes] = await Promise.all([API.getSets(), API.getItems()]);
+      const [setsRes, itemsRes] = await Promise.all([API.getSets(this.sort), API.getItems()]);
       this.sets = setsRes.data;
       this.allItems = itemsRes.data;
       this.renderSets();

@@ -3,6 +3,11 @@ const supabase = require('../config/database');
 // GET /api/sets
 exports.getAll = async (req, res, next) => {
   try {
+    const { sortBy, sortDir } = req.query;
+    const allowedSort = new Set(['created_at', 'price', 'name', 'calculated_stock']);
+    const sortKey = allowedSort.has(sortBy) ? sortBy : 'created_at';
+    const ascending = `${sortDir}`.toLowerCase() === 'asc';
+
     const { data: sets, error } = await supabase
       .from('sets')
       .select('*, set_items(id, quantity, item_id, items(id, name, price, stock))')
@@ -35,7 +40,16 @@ exports.getAll = async (req, res, next) => {
       };
     });
 
-    res.json({ success: true, data: result });
+    const sorted = [...result].sort((a, b) => {
+      const dir = ascending ? 1 : -1;
+      if (sortKey === 'name') return dir * String(a.name || '').localeCompare(String(b.name || ''), 'id-ID');
+      if (sortKey === 'price') return dir * ((Number(a.price) || 0) - (Number(b.price) || 0));
+      if (sortKey === 'calculated_stock') return dir * ((Number(a.calculated_stock) || 0) - (Number(b.calculated_stock) || 0));
+      // created_at
+      return dir * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    });
+
+    res.json({ success: true, data: sorted });
   } catch (err) {
     next(err);
   }

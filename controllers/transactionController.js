@@ -117,8 +117,12 @@ exports.create = async (req, res, next) => {
 // GET /api/transactions
 exports.getAll = async (req, res, next) => {
   try {
-    const { status } = req.query;
-    let query = supabase.from('transactions').select('*').order('created_at', { ascending: false });
+    const { status, sortBy, sortDir } = req.query;
+    const allowedSort = new Set(['created_at', 'total_price']);
+    const column = allowedSort.has(sortBy) ? sortBy : 'created_at';
+    const ascending = `${sortDir}`.toLowerCase() === 'asc';
+
+    let query = supabase.from('transactions').select('*').order(column, { ascending });
 
     if (status) {
       query = query.eq('status', status);

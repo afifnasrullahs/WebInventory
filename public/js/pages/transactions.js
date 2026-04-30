@@ -7,6 +7,7 @@ const TransactionsPage = {
   searchQuery: '',
   txnItems: [],
   productSearchQuery: '',
+  sort: { sortBy: 'created_at', sortDir: 'desc' },
 
   async render() {
     const content = document.getElementById('content');
@@ -21,6 +22,12 @@ const TransactionsPage = {
       <div class="table-wrapper" style="margin-bottom:20px;">
         <div class="table-toolbar">
           <input type="text" class="form-control search-input" id="txnSearch" placeholder="Cari transaksi, username, atau item...">
+          <select class="form-control" id="txnSort" style="width:240px;min-width:240px;">
+            <option value="created_at:desc">Terbaru</option>
+            <option value="created_at:asc">Terlama</option>
+            <option value="total_price:asc">Total: kecil → besar</option>
+            <option value="total_price:desc">Total: besar → kecil</option>
+          </select>
         </div>
       </div>
       <div class="filter-tabs" id="txnFilters">
@@ -36,6 +43,11 @@ const TransactionsPage = {
 
     document.getElementById('createTxnBtn').addEventListener('click', () => this.showCreateForm());
     document.getElementById('txnSearch').addEventListener('input', () => this.renderTable());
+    document.getElementById('txnSort').addEventListener('change', () => {
+      const [sortBy, sortDir] = (document.getElementById('txnSort').value || 'created_at:desc').split(':');
+      this.sort = { sortBy, sortDir };
+      this.loadData();
+    });
     document.getElementById('txnFilters').addEventListener('click', (e) => {
       if (e.target.classList.contains('filter-tab')) {
         document.querySelectorAll('#txnFilters .filter-tab').forEach((t) => t.classList.remove('active'));
@@ -50,7 +62,7 @@ const TransactionsPage = {
 
   async loadData() {
     try {
-      const res = await API.getTransactions(this.currentFilter);
+      const res = await API.getTransactions(this.currentFilter, this.sort);
       this.transactions = res.data;
       this.renderTable();
     } catch (err) {

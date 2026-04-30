@@ -6,10 +6,15 @@ const { sendDiscordWebhook } = require('../utils/discordWebhook');
 // GET /api/joki/services
 exports.getAllServices = async (req, res, next) => {
   try {
+    const { sortBy, sortDir } = req.query;
+    const allowedSort = new Set(['created_at', 'price', 'name']);
+    const column = allowedSort.has(sortBy) ? sortBy : 'created_at';
+    const ascending = `${sortDir}`.toLowerCase() === 'asc';
+
     const { data, error } = await supabase
       .from('joki_services')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order(column, { ascending });
 
     if (error) throw error;
     res.json({ success: true, data });
@@ -105,11 +110,15 @@ exports.deleteService = async (req, res, next) => {
 // GET /api/joki/orders
 exports.getAllOrders = async (req, res, next) => {
   try {
-    const { status } = req.query;
+    const { status, sortBy, sortDir } = req.query;
+    const allowedSort = new Set(['created_at', 'price']);
+    const column = allowedSort.has(sortBy) ? sortBy : 'created_at';
+    const ascending = `${sortDir}`.toLowerCase() === 'asc';
+
     let query = supabase
       .from('joki_orders')
       .select('*, joki_services(name)')
-      .order('created_at', { ascending: false });
+      .order(column, { ascending });
 
     if (status) {
       query = query.eq('status', status);
