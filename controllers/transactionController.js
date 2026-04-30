@@ -18,9 +18,15 @@ const enrichTransactions = async (transactions) => {
       ...details.filter((detail) => detail.type === 'item').map((detail) => detail.ref_id),
     ]),
   ];
+  const setIds = [
+    ...new Set([
+      ...details.filter((detail) => detail.type === 'set').map((detail) => detail.ref_id),
+    ]),
+  ];
 
-  const [itemsRes, breakdownRes] = await Promise.all([
+  const [itemsRes, setsRes, breakdownRes] = await Promise.all([
     itemIds.length ? supabase.from('items').select('id, name').in('id', itemIds) : Promise.resolve({ data: [] }),
+    setIds.length ? supabase.from('sets').select('id, name').in('id', setIds) : Promise.resolve({ data: [] }),
     detailIds.length
       ? supabase
           .from('transaction_item_breakdown')
@@ -30,9 +36,11 @@ const enrichTransactions = async (transactions) => {
   ]);
 
   if (itemsRes.error) throw itemsRes.error;
+  if (setsRes.error) throw setsRes.error;
   if (breakdownRes.error) throw breakdownRes.error;
 
   const itemNames = new Map((itemsRes.data || []).map((item) => [item.id, item.name]));
+  const setNames = new Map((setsRes.data || []).map((set) => [set.id, set.name]));
   const summaryByTxn = new Map(txnIds.map((id) => [id, []]));
   const summaryByDetail = new Map(detailIds.map((id) => [id, []]));
 
@@ -53,12 +61,21 @@ const enrichTransactions = async (transactions) => {
   details.forEach((detail) => {
     const detailSummary = summaryByDetail.get(detail.id) || [];
 
-    if (detail.type === 'item' && !detailSummary.length) {
-      summaryByTxn.get(detail.transaction_id).push({
-        name: itemNames.get(detail.ref_id) || 'Deleted Item',
-        quantity: detail.quantity,
-        type: 'item',
-      });
+    // Fallback: if no breakdown row, still show original detail so UI "Item / Qty" is never empty.
+    if (!detailSummary.length) {
+      if (detail.type === 'item') {
+        summaryByTxn.get(detail.transaction_id).push({
+          name: itemNames.get(detail.ref_id) || 'Deleted Item',
+          quantity: detail.quantity,
+          type: 'item',
+        });
+      } else {
+        summaryByTxn.get(detail.transaction_id).push({
+          name: setNames.get(detail.ref_id) || 'Deleted Set',
+          quantity: detail.quantity,
+          type: 'set',
+        });
+      }
       return;
     }
 
