@@ -13,6 +13,8 @@ app.use('/api/items', require('../routes/items'));
 app.use('/api/sets', require('../routes/sets'));
 app.use('/api/transactions', require('../routes/transactions'));
 app.use('/api/joki', require('../routes/joki'));
+app.use('/api/activities', require('../routes/activities'));
+app.use('/api/income', require('../routes/income'));
 app.use('/api/config', require('../routes/config'));
 app.use('/api/yummytrack', require('../routes/yummytrack'));
 
