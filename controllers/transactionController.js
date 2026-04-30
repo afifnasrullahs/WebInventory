@@ -503,3 +503,37 @@ exports.cancel = async (req, res, next) => {
     next(err);
   }
 };
+
+// DELETE /api/transactions/:id
+exports.delete = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const { data: txn, error: getErr } = await supabase
+      .from('transactions')
+      .select('id,status')
+      .eq('id', id)
+      .single();
+    if (getErr) throw getErr;
+    if (!txn) return res.status(404).json({ success: false, error: 'Transaction not found' });
+
+    if (txn.status !== 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        error: 'Hanya transaksi berstatus cancelled yang bisa dihapus',
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('transactions')
+      .delete()
+      .eq('id', id)
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};

@@ -8,5 +8,6 @@ router.put('/:id', ctrl.update);
 router.put('/:id/status', ctrl.updateStatus);
 router.put('/:id/cancel', ctrl.cancel);
 router.put('/:id/full', ctrl.updateFull);
+router.delete('/:id', ctrl.delete);
 
 module.exports = router;

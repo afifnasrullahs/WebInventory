@@ -10,17 +10,33 @@ const API = {
     return qs ? `?${qs}` : '';
   },
 
+  sanitizeHeaderValue(value, headerName = 'header') {
+    const str = String(value ?? '').trim();
+    // Browser fetch headers only allow ISO-8859-1 code points.
+    const hasInvalid = /[^\u0000-\u00FF]/.test(str);
+    if (hasInvalid) {
+      throw new Error(`Nilai ${headerName} mengandung karakter tidak valid. Coba paste ulang tanpa karakter khusus.`);
+    }
+    return str;
+  },
+
   async request(method, endpoint, data = null, requestOptions = {}) {
     const isGet = method === 'GET';
     const url = isGet
       ? `${this.baseUrl}${endpoint}${endpoint.includes('?') ? '&' : '?'}_ts=${Date.now()}`
       : `${this.baseUrl}${endpoint}`;
 
+    const safeHeaders = { 'Content-Type': 'application/json' };
+    const customHeaders = requestOptions.headers || {};
+    Object.entries(customHeaders).forEach(([k, v]) => {
+      safeHeaders[k] = this.sanitizeHeaderValue(v, k);
+    });
+
     const options = {
       method,
       cache: isGet ? 'no-store' : 'default',
       ...requestOptions,
-      headers: { 'Content-Type': 'application/json', ...(requestOptions.headers || {}) },
+      headers: safeHeaders,
     };
     if (data) options.body = JSON.stringify(data);
 
@@ -76,6 +92,7 @@ const API = {
   updateTransactionFull(id, data) { return this.request('PUT', `/transactions/${id}/full`, data); },
   updateTransactionStatus(id, status) { return this.request('PUT', `/transactions/${id}/status`, { status }); },
   cancelTransaction(id) { return this.request('PUT', `/transactions/${id}/cancel`); },
+  deleteTransaction(id) { return this.request('DELETE', `/transactions/${id}`); },
 
   // Joki Services
   getJokiServices(opts = {}) {
@@ -96,6 +113,7 @@ const API = {
   updateJokiOrder(id, data) { return this.request('PUT', `/joki/orders/${id}`, data); },
   updateJokiOrderStatus(id, status) { return this.request('PUT', `/joki/orders/${id}/status`, { status }); },
   cancelJokiOrder(id) { return this.request('PUT', `/joki/orders/${id}/cancel`); },
+  deleteJokiOrder(id) { return this.request('DELETE', `/joki/orders/${id}`); },
 
   // Yummytrack import
   importYummytrackPetsVps(apiKey) {

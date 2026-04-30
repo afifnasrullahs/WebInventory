@@ -14,5 +14,6 @@ router.get('/orders/:id', ctrl.getOrderById);
 router.put('/orders/:id', ctrl.updateOrder);
 router.put('/orders/:id/status', ctrl.updateOrderStatus);
 router.put('/orders/:id/cancel', ctrl.cancelOrder);
+router.delete('/orders/:id', ctrl.deleteOrder);
 
 module.exports = router;

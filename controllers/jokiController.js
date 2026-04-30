@@ -370,3 +370,37 @@ exports.cancelOrder = async (req, res, next) => {
     next(err);
   }
 };
+
+// DELETE /api/joki/orders/:id
+exports.deleteOrder = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const { data: order, error: getErr } = await supabase
+      .from('joki_orders')
+      .select('id,status')
+      .eq('id', id)
+      .single();
+    if (getErr) throw getErr;
+    if (!order) return res.status(404).json({ success: false, error: 'Joki order not found' });
+
+    if (order.status !== 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        error: 'Hanya order joki berstatus cancelled yang bisa dihapus',
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('joki_orders')
+      .delete()
+      .eq('id', id)
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};

@@ -137,6 +137,11 @@ const TransactionsPage = {
                     <button class="btn btn-sm btn-success" onclick="TransactionsPage.markDone('${txn.id}')" title="Selesai"><i class="bx bx-check"></i></button>
                     <button class="btn btn-sm btn-danger" onclick="TransactionsPage.cancelTxn('${txn.id}')" title="Cancel"><i class="bx bx-x"></i></button>
                   ` : ''}
+                  ${txn.status === 'cancelled' ? `
+                    <button class="btn btn-sm btn-danger" onclick="TransactionsPage.deleteCancelledTxn('${txn.id}')" title="Hapus Permanen">
+                      <i class="bx bx-trash"></i>
+                    </button>
+                  ` : ''}
                 </div>
               </td>
             </tr>
@@ -597,6 +602,27 @@ const TransactionsPage = {
       try {
         await API.cancelTransaction(id);
         App.toast('Transaksi di-cancel, stok dikembalikan');
+        App.closeModal();
+        await this.loadData();
+      } catch (err) {
+        App.toast(err.message, 'error');
+      }
+    });
+  },
+
+  deleteCancelledTxn(id) {
+    App.openModal('Hapus Transaksi Cancelled', `
+      <p>Yakin ingin menghapus transaksi ini secara permanen?</p>
+      <p style="color:var(--text-muted);font-size:13px;margin-top:8px;">Aksi ini tidak bisa dibatalkan.</p>
+    `, `
+      <button class="btn btn-secondary" onclick="App.closeModal()">Batal</button>
+      <button class="btn btn-danger" id="confirmDeleteCancelledTxnBtn"><i class="bx bx-trash"></i>Hapus</button>
+    `);
+
+    document.getElementById('confirmDeleteCancelledTxnBtn').addEventListener('click', async () => {
+      try {
+        await API.deleteTransaction(id);
+        App.toast('Transaksi cancelled berhasil dihapus');
         App.closeModal();
         await this.loadData();
       } catch (err) {

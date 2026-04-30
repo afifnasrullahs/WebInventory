@@ -141,6 +141,9 @@ const JokiPage = {
                         <button class="btn btn-sm btn-success" onclick="JokiPage.advanceStatus('${o.id}', 'done')" title="Complete"><i class="bx bx-check"></i></button>
                         <button class="btn btn-sm btn-danger" onclick="JokiPage.cancelOrder('${o.id}')" title="Cancel"><i class="bx bx-x"></i></button>
                       ` : ''}
+                      ${o.status === 'cancelled' ? `
+                        <button class="btn btn-sm btn-danger" onclick="JokiPage.deleteCancelledOrder('${o.id}')" title="Hapus Permanen"><i class="bx bx-trash"></i></button>
+                      ` : ''}
                     </div>
                   </td>
                 </tr>
@@ -540,6 +543,27 @@ const JokiPage = {
       try {
         await API.cancelJokiOrder(id);
         App.toast('Order joki di-cancel');
+        App.closeModal();
+        await this.loadData();
+      } catch (err) {
+        App.toast(err.message, 'error');
+      }
+    });
+  },
+
+  deleteCancelledOrder(id) {
+    App.openModal('Hapus Order Joki Cancelled', `
+      <p>Yakin ingin menghapus order joki ini secara permanen?</p>
+      <p style="color:var(--text-muted);font-size:13px;margin-top:8px;">Aksi ini tidak bisa dibatalkan.</p>
+    `, `
+      <button class="btn btn-secondary" onclick="App.closeModal()">Batal</button>
+      <button class="btn btn-danger" id="confirmDeleteCancelledJokiBtn"><i class="bx bx-trash"></i>Hapus</button>
+    `);
+
+    document.getElementById('confirmDeleteCancelledJokiBtn').addEventListener('click', async () => {
+      try {
+        await API.deleteJokiOrder(id);
+        App.toast('Order joki cancelled berhasil dihapus');
         App.closeModal();
         await this.loadData();
       } catch (err) {
