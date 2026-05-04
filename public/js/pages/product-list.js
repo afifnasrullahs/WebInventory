@@ -60,26 +60,38 @@ const ProductListPage = {
 
   getRows() {
     return [
-      ...this.items.map((item) => ({
-        type: 'Item',
-        name: item.name,
-        price: item.price,
-        quantity: item.send_quantity || 1,
-        stock: item.stock,
-      })),
-      ...this.sets.map((set) => ({
-        type: 'Set',
-        name: set.name,
-        price: set.price,
-        quantity: (set.items || []).reduce((total, item) => total + (item.quantity || 0), 0),
-        stock: set.calculated_stock,
-      })),
+      ...this.items.map((item) => {
+        const sendQty = item.send_quantity || 1;
+        const inv = Number(item.stock) || 0;
+        const stockKirim = sendQty > 0 ? Math.floor(inv / sendQty) : 0;
+        return {
+          type: 'Item',
+          name: item.name,
+          price: item.price,
+          quantity: sendQty,
+          inventory: inv,
+          stockKirim,
+        };
+      }),
+      ...this.sets.map((set) => {
+        const qtySum = (set.items || []).reduce((total, item) => total + (item.quantity || 0), 0);
+        const calc = set.calculated_stock ?? 0;
+        return {
+          type: 'Set',
+          name: set.name,
+          price: set.price,
+          quantity: qtySum,
+          inventory: null,
+          stockKirim: calc,
+        };
+      }),
       ...this.jokiServices.map((service) => ({
         type: 'Joki',
         name: service.name,
         price: service.price,
         quantity: '-',
-        stock: '-',
+        inventory: null,
+        stockKirim: null,
       })),
     ];
   },
@@ -99,10 +111,10 @@ const ProductListPage = {
       if (sortBy === 'name') return dir * String(a.name || '').localeCompare(String(b.name || ''), 'id-ID');
       if (sortBy === 'price') return dir * ((Number(a.price) || 0) - (Number(b.price) || 0));
       if (sortBy === 'stock') {
-        const av = a.stock === '-' ? null : Number(a.stock);
-        const bv = b.stock === '-' ? null : Number(b.stock);
+        const av = a.stockKirim == null ? null : Number(a.stockKirim);
+        const bv = b.stockKirim == null ? null : Number(b.stockKirim);
         if (av === null && bv === null) return 0;
-        if (av === null) return 1; // push unknown stock to bottom
+        if (av === null) return 1;
         if (bv === null) return -1;
         return dir * (av - bv);
       }
@@ -120,21 +132,27 @@ const ProductListPage = {
           <tr>
             <th>Tipe</th>
             <th>Nama Produk</th>
-            <th>Quantity</th>
+            <th>Jumlah Kirim</th>
+            <th>Stok Inventory</th>
             <th>Stok</th>
             <th>Harga</th>
           </tr>
         </thead>
         <tbody>
-          ${rows.map((row) => `
+          ${rows.map((row) => {
+            const invCell = row.inventory == null ? '—' : row.inventory;
+            const stokCell = row.stockKirim == null ? '—' : row.stockKirim;
+            return `
             <tr>
               <td><span class="badge ${this.getTypeBadgeClass(row.type)}">${row.type}</span></td>
               <td><strong>${row.name}</strong></td>
               <td>${row.quantity}</td>
-              <td>${row.stock}</td>
+              <td>${invCell}</td>
+              <td title="${row.type === 'Item' ? 'Stok inventori ÷ jumlah kirim' : row.type === 'Set' ? 'Set tersedia (dari komposisi item)' : ''}">${stokCell}</td>
               <td class="price">${App.formatPrice(row.price)}</td>
             </tr>
-          `).join('')}
+          `;
+          }).join('')}
         </tbody>
       </table>
     `;

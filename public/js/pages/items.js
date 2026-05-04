@@ -69,17 +69,23 @@ const ItemsPage = {
             <th>Harga</th>
             <th>Jumlah Kirim</th>
             <th>Stok Inventory</th>
+            <th>Stok</th>
             <th>Dibuat</th>
             <th>Aksi</th>
           </tr>
         </thead>
         <tbody>
-          ${this.items.map((item) => `
+          ${this.items.map((item) => {
+            const sendQty = item.send_quantity || 1;
+            const inv = Number(item.stock) || 0;
+            const stockKirim = sendQty > 0 ? Math.floor(inv / sendQty) : 0;
+            return `
             <tr>
               <td><strong>${item.name}</strong></td>
               <td class="price">${App.formatPrice(item.price)}</td>
-              <td><span class="badge badge-item">${item.send_quantity || 1}</span></td>
+              <td><span class="badge badge-item">${sendQty}</span></td>
               <td>${App.stockBadge(item.stock)}</td>
+              <td><span style="font-weight:700;color:var(--accent-secondary)" title="Stok inventori ÷ jumlah kirim">${stockKirim}</span></td>
               <td style="font-size:12px;color:var(--text-muted)">${App.formatDate(item.created_at)}</td>
               <td>
                 <div class="actions">
@@ -88,7 +94,8 @@ const ItemsPage = {
                 </div>
               </td>
             </tr>
-          `).join('')}
+          `;
+          }).join('')}
         </tbody>
       </table>
     `;

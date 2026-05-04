@@ -240,19 +240,10 @@ const TransactionsPage = {
         <div class="form-group" style="margin-bottom:10px;">
           <input type="text" class="form-control search-input" id="txnProductSearch" placeholder="Cari produk yang ingin ditambahkan...">
         </div>
-        <div class="form-row" style="grid-template-columns: 100px 1fr auto; align-items:end;">
+        <div class="form-row" style="grid-template-columns: 1fr auto; align-items:end;">
           <div class="form-group" style="margin-bottom:0">
-            <label style="font-size:11px">Tipe</label>
-            <select class="form-control" id="txnProductType" style="width:100%">
-              <option value="item">Item</option>
-              <option value="set">Set</option>
-            </select>
-          </div>
-          <div class="form-group" style="margin-bottom:0">
-            <label style="font-size:11px">Pilih Produk</label>
-            <select class="form-control" id="txnProductSelect">
-              ${this.allItems.map((i) => `<option value="${i.id}" data-price="${i.price}" data-stock="${i.stock}" data-sendqty="${i.send_quantity || 1}">${i.name} (Stok: ${i.stock})</option>`).join('')}
-            </select>
+            <label style="font-size:11px">Pilih Item atau Set</label>
+            <select class="form-control" id="txnProductSelect"></select>
           </div>
           <button class="btn btn-sm btn-primary" id="txnAddProductBtn" style="height:38px;"><i class="bx bx-plus"></i></button>
         </div>
@@ -270,45 +261,67 @@ const TransactionsPage = {
       <button class="btn btn-primary" id="submitTxnBtn"><i class="bx bx-check"></i>Buat Transaksi</button>
     `, 'lg');
 
-    document.getElementById('txnProductType').addEventListener('change', () => this.updateProductSelect());
     document.getElementById('txnProductSearch').addEventListener('input', (e) => {
       this.productSearchQuery = e.target.value.trim().toLowerCase();
       this.updateProductSelect();
     });
     document.getElementById('txnAddProductBtn').addEventListener('click', () => this.addProduct());
     document.getElementById('submitTxnBtn').addEventListener('click', () => this.submitTransaction());
+    this.updateProductSelect();
   },
 
-  getFilteredProducts(type) {
-    const products = type === 'item' ? this.allItems : this.allSets;
-    if (!this.productSearchQuery) return products;
-    return products.filter((product) => (product.name || '').toLowerCase().includes(this.productSearchQuery));
+  getMergedProductsForTxn() {
+    const q = this.productSearchQuery;
+    const items = (this.allItems || [])
+      .filter((i) => !q || (i.name || '').toLowerCase().includes(q))
+      .map((i) => ({ ...i, productType: 'item' }));
+    const sets = (this.allSets || [])
+      .filter((s) => !q || (s.name || '').toLowerCase().includes(q))
+      .map((s) => ({ ...s, productType: 'set' }));
+    return [...items, ...sets].sort((a, b) =>
+      String(a.name || '').localeCompare(String(b.name || ''), 'id-ID')
+    );
   },
 
   updateProductSelect() {
-    const type = document.getElementById('txnProductType').value;
     const select = document.getElementById('txnProductSelect');
-    const previousValue = select.value;
-    const filteredProducts = this.getFilteredProducts(type);
+    if (!select) return;
 
-    if (type === 'item') {
-      select.innerHTML = filteredProducts.map((i) =>
-        `<option value="${i.id}" data-price="${i.price}" data-stock="${i.stock}" data-sendqty="${i.send_quantity || 1}">${i.name} (Stok: ${i.stock})</option>`
-      ).join('');
-    } else {
-      select.innerHTML = filteredProducts.map((s) =>
-        `<option value="${s.id}" data-price="${s.price}" data-stock="${s.calculated_stock}" data-sendqty="1">${s.name} (Stok: ${s.calculated_stock})</option>`
-      ).join('');
+    const prevOption = select.options[select.selectedIndex];
+    const previousValue = prevOption?.value;
+    const previousType = prevOption?.dataset?.type;
+
+    const list = this.getMergedProductsForTxn();
+
+    if (!list.length) {
+      select.innerHTML = '<option value="" data-type="">— Tidak ada produk —</option>';
+      return;
     }
 
-    if (filteredProducts.length) {
-      const stillExists = filteredProducts.some((product) => product.id === previousValue);
-      select.value = stillExists ? previousValue : filteredProducts[0].id;
+    select.innerHTML = list
+      .map((p) => {
+        if (p.productType === 'item') {
+          const send = p.send_quantity || 1;
+          return `<option value="${p.id}" data-type="item" data-price="${p.price}" data-stock="${p.stock}" data-sendqty="${send}">${p.name} (Item • Stok: ${p.stock})</option>`;
+        }
+        const cs = p.calculated_stock ?? 0;
+        return `<option value="${p.id}" data-type="set" data-price="${p.price}" data-stock="${cs}" data-sendqty="1">${p.name} (Set • Stok: ${cs})</option>`;
+      })
+      .join('');
+
+    const stillExists = list.some((p) => p.id === previousValue && p.productType === previousType);
+    if (stillExists) {
+      for (let i = 0; i < select.options.length; i++) {
+        const o = select.options[i];
+        if (o.value === previousValue && o.dataset.type === previousType) {
+          select.selectedIndex = i;
+          break;
+        }
+      }
     }
   },
 
   addProduct() {
-    const type = document.getElementById('txnProductType').value;
     const select = document.getElementById('txnProductSelect');
     const option = select.options[select.selectedIndex];
 
@@ -316,6 +329,8 @@ const TransactionsPage = {
       App.toast('Pilih produk terlebih dahulu', 'error');
       return;
     }
+
+    const type = option.dataset.type;
 
     const existing = this.txnItems.find((i) => i.ref_id === option.value && i.type === type);
     if (existing) {
@@ -497,19 +512,10 @@ const TransactionsPage = {
           <div class="form-group" style="margin-bottom:10px;">
             <input type="text" class="form-control search-input" id="txnProductSearch" placeholder="Cari produk yang ingin ditambahkan...">
           </div>
-          <div class="form-row" style="grid-template-columns: 100px 1fr auto; align-items:end;">
+          <div class="form-row" style="grid-template-columns: 1fr auto; align-items:end;">
             <div class="form-group" style="margin-bottom:0">
-              <label style="font-size:11px">Tipe</label>
-              <select class="form-control" id="txnProductType" style="width:100%">
-                <option value="item">Item</option>
-                <option value="set">Set</option>
-              </select>
-            </div>
-            <div class="form-group" style="margin-bottom:0">
-              <label style="font-size:11px">Pilih Produk</label>
-              <select class="form-control" id="txnProductSelect">
-                ${this.allItems.map((i) => `<option value="${i.id}" data-price="${i.price}" data-stock="${i.stock}" data-sendqty="${i.send_quantity || 1}">${i.name} (Stok: ${i.stock})</option>`).join('')}
-              </select>
+              <label style="font-size:11px">Pilih Item atau Set</label>
+              <select class="form-control" id="txnProductSelect"></select>
             </div>
             <button class="btn btn-sm btn-primary" id="txnAddProductBtn" style="height:38px;"><i class="bx bx-plus"></i></button>
           </div>
@@ -530,13 +536,13 @@ const TransactionsPage = {
       // Render current items
       this.renderTxnItems();
 
-      document.getElementById('txnProductType').addEventListener('change', () => this.updateProductSelect());
       document.getElementById('txnProductSearch').addEventListener('input', (e) => {
         this.productSearchQuery = e.target.value.trim().toLowerCase();
         this.updateProductSelect();
       });
       document.getElementById('txnAddProductBtn').addEventListener('click', () => this.addProduct());
       document.getElementById('submitTxnBtn').addEventListener('click', () => this.submitTransactionEdit(id));
+      this.updateProductSelect();
     } catch (err) {
       App.toast(err.message, 'error');
     }
